@@ -25,7 +25,7 @@ interface CourseSettings {
 export default function CourseSettingsPage() {
   const params = useParams();
   const router = useRouter();
-  const { token, user } = useAuth();
+  const { token } = useAuth();
   const courseId = params.courseId as string;
 
   // State
@@ -130,7 +130,7 @@ export default function CourseSettingsPage() {
         throw new Error(errorData.error || 'Failed to update course');
       }
 
-      const updatedCourse = await response.json();
+      // const updatedCourse = await response.json();
       setOriginalCourse({ ...course });
       setHasChanges(false);
       alert('Course settings updated successfully!');

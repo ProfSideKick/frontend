@@ -3,7 +3,7 @@
 import React, { useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { useAuth } from '@/contexts/AuthContext';
-import { ArrowLeft, Mail, MessageSquare, Phone, MapPin, Send, CheckCircle } from 'lucide-react';
+import { ArrowLeft, Mail, Phone, MapPin, Send, CheckCircle } from 'lucide-react';
 
 export default function ContactPage() {
   const router = useRouter();
@@ -110,8 +110,8 @@ export default function ContactPage() {
             Get in Touch
           </h1>
           <p className="text-xl text-gray-600 leading-relaxed">
-            Have questions about ProfSidekick? We'd love to hear from you. 
-            Send us a message and we'll respond as soon as possible.
+            Have questions about ProfSidekick? We would love to hear from you. 
+            Send us a message and we will respond as soon as possible.
           </p>
         </div>
       </section>
@@ -128,7 +128,7 @@ export default function ContactPage() {
                 <div className="text-center py-8">
                   <CheckCircle className="w-16 h-16 text-green-600 mx-auto mb-4" />
                   <h3 className="text-2xl font-semibold text-gray-900 mb-2">Message Sent!</h3>
-                  <p className="text-gray-600">Thank you for contacting us. We'll get back to you soon.</p>
+                  <p className="text-gray-600">Thank you for contacting us. We will get back to you soon.</p>
                 </div>
               ) : (
                 <form onSubmit={handleSubmit} className="space-y-6">
@@ -229,8 +229,8 @@ export default function ContactPage() {
               <div>
                 <h2 className="text-3xl font-bold text-gray-900 mb-6">Contact Information</h2>
                 <p className="text-lg text-gray-600 mb-8">
-                  We're here to help! Reach out to us through any of these channels, 
-                  and we'll get back to you as quickly as possible.
+                  We are here to help! Reach out to us through any of these channels, 
+                  and we will get back to you as quickly as possible.
                 </p>
               </div>
 
@@ -314,7 +314,7 @@ export default function ContactPage() {
               <h3 className="text-xl font-semibold text-gray-900 mb-3">What file formats are supported?</h3>
               <p className="text-gray-600">
                 ProfSidekick currently supports PDF files and PowerPoint presentations (PPTX). 
-                We're working on adding support for Google Slides and other formats.
+                We are working on adding support for Google Slides and other formats.
               </p>
             </div>
 

@@ -2,13 +2,13 @@
 
 import React, { useState, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
-import { ChevronLeft, Play, Clock, Copy, Check, Calendar, Presentation, FileText, Settings2 } from 'lucide-react';
+import { ChevronLeft, Play, Clock, Copy, Check, Calendar, Presentation, Settings2 } from 'lucide-react';
 import { useParams } from 'next/navigation';
 import SessionRuns from '@/components/sessions/SessionRuns';
 import ProtectedRoute from '@/components/auth/ProtectedRoute';
 import AISettings from '@/components/sessions/AISettings';
 import SlidesPreview from '@/components/sessions/SlidesPreview';
-import { config } from '@/lib/config';
+// import { config } from '@/lib/config';
 import { useAuth } from '@/contexts/AuthContext';
 
 interface SessionDetails {

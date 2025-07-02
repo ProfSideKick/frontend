@@ -2,7 +2,7 @@
 
 import React, { useEffect, useRef, useState, useCallback } from "react";
 import { ChevronLeft, ChevronRight, Volume2, VolumeX, Phone, PhoneOff, Mic, MicOff } from "lucide-react";
-import { ClassSession, SessionStatus,  } from "@/types";
+import { ClassSession  } from "@/types";
 // import { useTranscript } from "@/contexts/TranscriptContext";
 import { useEvent } from "@/contexts/EventContext";
 import { useHandleServerEvent } from "@/hooks/useHandleServerEvent";

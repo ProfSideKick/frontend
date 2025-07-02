@@ -62,7 +62,7 @@ interface UseCoursesReturn {
 }
 
 export function useCourses(): UseCoursesReturn {
-  const { token, user } = useAuth();
+  const { token,  } = useAuth();
   const [courses, setCourses] = useState<CourseDetails[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);

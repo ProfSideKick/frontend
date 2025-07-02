@@ -3,7 +3,7 @@
 import React from 'react';
 import { useRouter } from 'next/navigation';
 import { useAuth } from '@/contexts/AuthContext';
-import { ArrowLeft, Users, Target, Lightbulb, Award } from 'lucide-react';
+import { ArrowLeft, Users, Lightbulb, Award } from 'lucide-react';
 
 export default function AboutPage() {
   const router = useRouter();
@@ -77,7 +77,7 @@ export default function AboutPage() {
             About ProfSidekick
           </h1>
           <p className="text-xl text-gray-600 leading-relaxed">
-            We're on a mission to revolutionize education by empowering educators with 
+            We are on a mission to revolutionize education by empowering educators with 
             cutting-edge AI technology that makes teaching more interactive, engaging, and effective.
           </p>
         </div>
@@ -108,7 +108,7 @@ export default function AboutPage() {
                <div className="text-center">
                  <h3 className="text-2xl font-bold text-blue-900 mb-4">🚀 Coming Soon</h3>
                  <p className="text-gray-700 mb-6">
-                   We're building something amazing for educators worldwide. 
+                   We are building something amazing for educators worldwide. 
                    ProfSidekick is currently in active development.
                  </p>
                  {/* <div className="grid grid-cols-2 gap-4 text-center">
@@ -152,7 +152,7 @@ export default function AboutPage() {
               </div>
               <h3 className="text-2xl font-semibold text-gray-900 mb-4">Innovation</h3>
               <p className="text-gray-600 leading-relaxed">
-                We continuously push the boundaries of what's possible in educational technology, 
+                We continuously push the boundaries of what is possible in educational technology, 
                 bringing cutting-edge AI capabilities to everyday teaching scenarios.
               </p>
             </div>
@@ -163,7 +163,7 @@ export default function AboutPage() {
               </div>
               <h3 className="text-2xl font-semibold text-gray-900 mb-4">Accessibility</h3>
               <p className="text-gray-600 leading-relaxed">
-                Great teaching tools should be available to everyone. We're committed to making 
+                Great teaching tools should be available to everyone. We are committed to making 
                 advanced AI technology accessible and affordable for educators worldwide.
               </p>
             </div>
@@ -205,7 +205,7 @@ export default function AboutPage() {
                 presentations to create truly interactive learning experiences.
               </p>
                              <p>
-                 Today, we're actively developing ProfSidekick with the vision of serving educators worldwide, 
+                 Today, we are actively developing ProfSidekick with the vision of serving educators worldwide, 
                  from K-12 teachers to university professors, helping them transform their classrooms into engaging, 
                  AI-enhanced learning environments. We're currently in the development phase, building something truly special.
                </p>

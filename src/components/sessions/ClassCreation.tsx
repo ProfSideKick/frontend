@@ -45,12 +45,12 @@ function CollapsibleSection({ title, isOpen, onToggle, children }: CollapsibleSe
 export default function ClassCreation() {
   const router = useRouter();
   const searchParams = useSearchParams();
-  const { token,  } = useAuth();
+  const { token } = useAuth();
   // const [, setDefaultPrompt] = useState("");
   
   // Course selection state
   const [selectedCourseId, setSelectedCourseId] = useState<string>('');
-  const [selectedCourse, setSelectedCourse] = useState<CourseDetails | null>(null);
+  const [, setSelectedCourse] = useState<CourseDetails | null>(null);
 
   // Check for courseId URL parameter to pre-select course
   useEffect(() => {

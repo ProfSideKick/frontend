@@ -37,7 +37,7 @@ interface CourseBasic {
 export default function ManageStudentsPage() {
   const params = useParams();
   const router = useRouter();
-  const { token, user } = useAuth();
+  const { token } = useAuth();
   const courseId = params.courseId as string;
 
   // State

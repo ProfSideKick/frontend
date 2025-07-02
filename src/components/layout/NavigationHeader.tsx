@@ -3,7 +3,7 @@
 import React, { useState } from 'react';
 import { useRouter, usePathname } from 'next/navigation';
 import { useAuth } from '@/contexts/AuthContext';
-import { LogOut, User, ChevronDown, Plus, Home } from 'lucide-react';
+import { LogOut, User, ChevronDown, Home } from 'lucide-react';
 
 export default function NavigationHeader() {
   const router = useRouter();

@@ -4,7 +4,7 @@ import React, { useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { useAuth } from '@/contexts/AuthContext';
 import { useCourses } from '@/hooks/useCourses';
-import { BookOpen, Search, Users, Plus, GraduationCap, Calendar, User } from 'lucide-react';
+import { BookOpen, Search, Users, Plus, GraduationCap } from 'lucide-react';
 
 export default function UnifiedDashboard() {
   const router = useRouter();

@@ -4,16 +4,16 @@ import React, { useState, useMemo } from 'react';
 import { useRouter } from 'next/navigation';
 import { useAuth } from '@/contexts/AuthContext';
 import { useCourses } from '@/hooks/useCourses';
-import { BookOpen, Search, Users, Clock, Play, GraduationCap } from 'lucide-react';
+import { BookOpen, Search, Users, GraduationCap } from 'lucide-react';
 
 export default function StudentDashboard() {
   const router = useRouter();
   const { user } = useAuth();
   const [searchQuery, setSearchQuery] = useState('');
-  const [selectedCourse, setSelectedCourse] = useState<string | null>(null);
+  // const [selectedCourse, setSelectedCourse] = useState<string | null>(null);
   
   // Fetch enrolled courses
-  const { courses, loading, error, refetch, getCourseSessions } = useCourses();
+  const { courses, loading, error, refetch,  } = useCourses();
 
   // Filter courses based on search query
   const filteredCourses = useMemo(() => {

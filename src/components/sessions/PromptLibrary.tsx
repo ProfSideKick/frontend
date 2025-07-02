@@ -1,6 +1,6 @@
 'use client';
 
-import React, { useState, useEffect } from 'react';
+import React, { useState } from 'react';
 import { Search, Plus, Edit, Trash2, Copy, Check, Star, Tag, Clock, User } from 'lucide-react';
 import PromptCreationModal from './PromptCreationModal';
 import { usePrompts, CustomPrompt } from '@/hooks/usePrompts';
@@ -63,7 +63,8 @@ export default function PromptLibrary({ currentInstructions, onSelectPrompt, onC
         } else {
           editableContent = contentStr;
         }
-      } catch (e) {
+      } catch (err) {
+        console.error('Failed to copy prompt:', err);
         // Fallback to legacy string content
         if (contentStr && !contentStr.includes("ProfSidekick")) {
           editableContent = contentStr;
@@ -92,7 +93,8 @@ export default function PromptLibrary({ currentInstructions, onSelectPrompt, onC
       } else {
         editableContent = contentStr;
       }
-    } catch (e) {
+    } catch (err) {
+      console.error('Failed to select prompt:', err);
       // Fallback to legacy string parsing
       console.log("📄 Using legacy prompt content as editable content");
       if (contentStr && !contentStr.includes("ProfSidekick")) {

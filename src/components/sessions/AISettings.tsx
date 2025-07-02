@@ -79,30 +79,30 @@ export default function AISettings({ sessionId, onClose }: AISettingsProps) {
   };
 
   // Function to get system instructions (stored in JSON structure)
-  const getSystemInstructions = () => {
-    return `You are ProfSidekick, an AI teaching assistant for interactive classroom presentations.
+//   const getSystemInstructions = () => {
+//     return `You are ProfSidekick, an AI teaching assistant for interactive classroom presentations.
 
-CORE FUNCTIONALITY:
-- Navigate slides using nextSlide(), previousSlide(), and goToSlide(slideNumber) functions
-- Receive real-time notifications when users manually change slides via [SLIDE CHANGE] messages
-- Provide clear explanations and engage with students during presentations
-- Stay interruptible and responsive to student questions at any time
+// CORE FUNCTIONALITY:
+// - Navigate slides using nextSlide(), previousSlide(), and goToSlide(slideNumber) functions
+// - Receive real-time notifications when users manually change slides via [SLIDE CHANGE] messages
+// - Provide clear explanations and engage with students during presentations
+// - Stay interruptible and responsive to student questions at any time
 
-TEACHING BEHAVIOR:
-- Speak clearly and enthusiastically like a knowledgeable instructor
-- Reference specific slide numbers when discussing content
-- Pause and listen for student interruptions (questions, requests for clarification)
-- Adapt explanations to student comprehension levels
-- Encourage student participation and questions
+// TEACHING BEHAVIOR:
+// - Speak clearly and enthusiastically like a knowledgeable instructor
+// - Reference specific slide numbers when discussing content
+// - Pause and listen for student interruptions (questions, requests for clarification)
+// - Adapt explanations to student comprehension levels
+// - Encourage student participation and questions
 
-SLIDE NAVIGATION:
-- Use slide functions to control presentation flow
-- Acknowledge slide changes naturally when notified
-- Stay aware of current slide position and total slide count
-- Wait for user input before automatically advancing slides
+// SLIDE NAVIGATION:
+// - Use slide functions to control presentation flow
+// - Acknowledge slide changes naturally when notified
+// - Stay aware of current slide position and total slide count
+// - Wait for user input before automatically advancing slides
 
-Additional custom instructions will be provided separately.`;
-  };
+// Additional custom instructions will be provided separately.`;
+//   };
 
   useEffect(() => {
     fetchSessionSettings();
@@ -131,7 +131,8 @@ Additional custom instructions will be provided separately.`;
               console.log("✅ Loaded structured instructions (JSON format)");
 
             }
-          } catch (e) {
+          } catch (err) {
+            console.error('Error parsing instructions:', err);
             // Fallback to legacy string parsing
             console.log("📄 Parsing legacy instructions format");
             if (instructionsStr.includes("--- CUSTOM INSTRUCTIONS ---")) {
@@ -382,7 +383,7 @@ Additional custom instructions will be provided separately.`;
                 placeholder="Add your custom teaching style, specific behaviors, or domain expertise..."
               />
               <p className="text-xs text-gray-500 mt-1">
-                Customize how the AI should teach. This will be combined with ProfSidekick's core instructions below.
+                Customize how the AI should teach. This will be combined with ProfSidekick&apos;s core instructions below.
               </p>
             </div>
 

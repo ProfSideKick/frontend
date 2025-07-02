@@ -1,9 +1,9 @@
 "use client";
 
-import React, { useEffect } from 'react';
+import React from 'react';
 import { useRouter } from 'next/navigation';
 import { useAuth } from '@/contexts/AuthContext';
-import { BookOpen, Users, Zap, ArrowRight, Star, CheckCircle } from 'lucide-react';
+import { BookOpen, Users, Zap, ArrowRight, CheckCircle } from 'lucide-react';
 
 export default function LandingPage() {
   const router = useRouter();

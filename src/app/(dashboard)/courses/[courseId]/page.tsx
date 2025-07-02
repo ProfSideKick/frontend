@@ -143,7 +143,7 @@ export default function CourseDetailPage() {
               <GraduationCap className="w-8 h-8 text-gray-400" />
             </div>
             <h2 className="text-xl font-semibold text-gray-900 mb-2">Course Not Found</h2>
-            <p className="text-gray-600 mb-4">The course you're looking for doesn't exist or you don't have access to it.</p>
+            <p className="text-gray-600 mb-4">The course you are looking for does not exist or you do not have access to it.</p>
             <button
               onClick={() => router.push('/dashboard')}
               className="bg-blue-600 text-white px-6 py-2 rounded-lg font-medium hover:bg-blue-700 transition-colors"
@@ -157,7 +157,7 @@ export default function CourseDetailPage() {
   }
 
   const isOwner = course.user_id === user?.id;
-  const isProfessor = user?.role === 'professor' || user?.role !== 'student';
+  // const isProfessor = user?.role === 'professor' || user?.role !== 'student';
 
   return (
     <ProtectedRoute>

@@ -11,7 +11,7 @@ import {
   Save, 
   Eye, 
   EyeOff, 
-  AlertTriangle, 
+  // AlertTriangle, 
   FileText, 
   Bell, 
   Palette,
@@ -25,7 +25,7 @@ import {
 } from 'lucide-react';
 import PromptCreationModal from '@/components/sessions/PromptCreationModal';
 import { usePrompts } from '@/hooks/usePrompts';
-import { parseTagsString } from '@/lib/tagUtils';
+// import { parseTagsString } from '@/lib/tagUtils';
 
 // Tab configuration
 const TABS = [
@@ -77,21 +77,21 @@ export default function ProfilePage() {
   const [editingPrompt, setEditingPrompt] = useState<any>(null);
 
   // Notification Settings State
-  const [notifications, setNotifications] = useState({
-    emailNotifications: true,
-    sessionReminders: true,
-    weeklyReports: false,
-    marketingEmails: false,
-    pushNotifications: true
-  });
+  // const [, setNotifications] = useState({
+  //   emailNotifications: true,
+  //   sessionReminders: true,
+  //   weeklyReports: false,
+  //   marketingEmails: false,
+  //   pushNotifications: true
+  // });
 
   // Preferences State
-  const [preferences, setPreferences] = useState({
-    theme: 'light',
-    language: 'en',
-    timezone: 'UTC',
-    dateFormat: 'MM/DD/YYYY'
-  });
+  // const [, setPreferences] = useState({
+  //   theme: 'light',
+  //   language: 'en',
+  //   timezone: 'UTC',
+  //   dateFormat: 'MM/DD/YYYY'
+  // });
 
   // UI State
   const [isLoading, setIsLoading] = useState(false);
@@ -154,25 +154,26 @@ export default function ProfilePage() {
     }));
   };
 
-  const handleNotificationChange = (key: string, value: boolean) => {
-    setNotifications(prev => ({
-      ...prev,
-      [key]: value
-    }));
-  };
+  // const handleNotificationChange = (key: string, value: boolean) => {
+  //   setNotifications(prev => ({
+  //     ...prev,
+  //     [key]: value
+  //   }));
+  // };
 
-  const handlePreferenceChange = (key: string, value: string) => {
-    setPreferences(prev => ({
-      ...prev,
-      [key]: value
-    }));
-  };
+  // const handlePreferenceChange = (key: string, value: string) => {
+  //   setPreferences(prev => ({
+  //     ...prev,
+  //     [key]: value
+  //   }));
+  // };
 
   const handleDeletePrompt = async (id: string) => {
     try {
       await deletePrompt(id);
       setMessage({ type: 'success', text: 'Prompt deleted successfully!' });
     } catch (error) {
+      console.error('Error deleting prompt:', error);
       setMessage({ type: 'error', text: 'Failed to delete prompt. Please try again.' });
     }
   };
@@ -189,6 +190,7 @@ export default function ProfilePage() {
         setMessage({ type: 'success', text: 'Prompt created successfully!' });
       }
     } catch (error) {
+      console.error('Error saving prompt:', error);
       setMessage({ type: 'error', text: editingPrompt ? 'Failed to update prompt.' : 'Failed to create prompt.' });
     }
   };
@@ -204,6 +206,7 @@ export default function ProfilePage() {
       
       setMessage({ type: 'success', text: 'Personal information updated successfully!' });
     } catch (error) {
+      console.error('Error updating personal information:', error);
       setMessage({ type: 'error', text: 'Failed to update personal information. Please try again.' });
     } finally {
       setIsSaving(false);
@@ -233,6 +236,7 @@ export default function ProfilePage() {
       setPasswordData({ currentPassword: '', newPassword: '', confirmPassword: '' });
       setMessage({ type: 'success', text: 'Password changed successfully!' });
     } catch (error) {
+      console.error('Error changing password:', error);
       setMessage({ type: 'error', text: 'Failed to change password. Please check your current password.' });
     } finally {
       setIsChangingPassword(false);
@@ -249,6 +253,7 @@ export default function ProfilePage() {
       await logout();
       router.push('/');
     } catch (error) {
+      console.error('Error deleting account:', error);
       setMessage({ type: 'error', text: 'Failed to delete account. Please try again.' });
       setIsLoading(false);
     }
@@ -490,6 +495,7 @@ export default function ProfilePage() {
                               await navigator.clipboard.writeText(prompt.content);
                               setMessage({ type: 'success', text: 'Prompt copied to clipboard!' });
                             } catch (err) {
+                              console.error('Error copying prompt:', err);
                               setMessage({ type: 'error', text: 'Failed to copy prompt' });
                             }
                           }}

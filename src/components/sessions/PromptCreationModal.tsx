@@ -76,7 +76,8 @@ Additional custom instructions will be provided separately.`;
           userContent = structuredContent.editable || "";
           console.log("✅ Loaded structured prompt content (JSON format)");
         }
-      } catch (e) {
+      } catch (err) {
+        console.error('Error parsing prompt content:', err);
         // Fallback to legacy string parsing
         console.log("📄 Parsing legacy prompt content format");
         if (contentStr && !contentStr.includes("ProfSidekick")) {
@@ -367,7 +368,7 @@ Additional custom instructions will be provided separately.`;
               )}
               <p className="mt-2 text-sm text-gray-500">
                 Write clear, detailed instructions for how the AI should behave. Include teaching style, 
-                tone, and specific behaviors you want the AI to exhibit. This will be combined with ProfSidekick's core instructions below.
+                tone, and specific behaviors you want the AI to exhibit. This will be combined with ProfSidekick&apos;s core instructions below.
               </p>
             </div>
 
