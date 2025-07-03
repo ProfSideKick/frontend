@@ -1,7 +1,7 @@
 'use client';
 
 import React, { useState, useEffect } from 'react';
-import { ChevronLeft, ChevronRight, Maximize2, Image as ImageIcon, RefreshCw } from 'lucide-react';
+import { ChevronLeft, ChevronRight, Maximize2, Image as ImageIcon, RefreshCw, Edit3 } from 'lucide-react';
 import { useAuth } from '@/contexts/AuthContext';
 import { config } from '@/lib/config';
 
@@ -30,6 +30,10 @@ export default function SlidesPreview({ slides, sessionId }: SlidesPreviewProps)
   const [isRegenerating, setIsRegenerating] = useState(false);
   const [editingVisionInstructions, setEditingVisionInstructions] = useState('');
   const [allSlides, setAllSlides] = useState<SlideData[]>(slides);
+  const [editingContent, setEditingContent] = useState('');
+  const [editingTitle, setEditingTitle] = useState('');
+  const [isEditingContent, setIsEditingContent] = useState(false);
+  const [isSavingContent, setIsSavingContent] = useState(false);
 
   // Update slides when props change
   useEffect(() => {
@@ -63,11 +67,17 @@ export default function SlidesPreview({ slides, sessionId }: SlidesPreviewProps)
   const handleSlideClick = (slide: SlideData) => {
     setSelectedSlide(slide);
     setEditingVisionInstructions(slide.visionInstructions || '');
+    setEditingContent(slide.content || '');
+    setEditingTitle(slide.title || '');
+    setIsEditingContent(false);
   };
 
   const closeModal = () => {
     setSelectedSlide(null);
     setEditingVisionInstructions('');
+    setEditingContent('');
+    setEditingTitle('');
+    setIsEditingContent(false);
   };
 
   const handleRegenerateSlide = async (slide: SlideData) => {
@@ -115,6 +125,60 @@ export default function SlidesPreview({ slides, sessionId }: SlidesPreviewProps)
       // You might want to show a toast notification here
     } finally {
       setIsRegenerating(false);
+    }
+  };
+
+  const handleSaveContent = async (slide: SlideData) => {
+    if (!token) {
+      console.error('No authentication token available');
+      return;
+    }
+
+    setIsSavingContent(true);
+    try {
+      const backendUrl = process.env.NEXT_PUBLIC_BACKEND_URL || 'http://localhost:8000';
+      const response = await fetch(
+        `${backendUrl}/api/sessions/${sessionId}/slides/${slide.id}/content`,
+        {
+          method: 'PUT',
+          headers: {
+            'Content-Type': 'application/json',
+            'Authorization': `Bearer ${token}`,
+          },
+          body: JSON.stringify({
+            content: editingContent,
+            title: editingTitle,
+          }),
+        }
+      );
+
+      if (!response.ok) {
+        throw new Error(`Failed to save slide content: ${response.statusText}`);
+      }
+
+      const updatedSessionData = await response.json();
+      
+      // Update the slides with the new data
+      setAllSlides(updatedSessionData.slidesDetails || allSlides.map(s => 
+        s.id === slide.id 
+          ? { ...s, content: editingContent, title: editingTitle }
+          : s
+      ));
+      
+      // Update the selected slide with the new data
+      const updatedSlide = updatedSessionData.slidesDetails?.find((s: SlideData) => s.id === slide.id) ||
+        { ...slide, content: editingContent, title: editingTitle };
+      setSelectedSlide(updatedSlide);
+      
+      // Exit editing mode
+      setIsEditingContent(false);
+
+      console.log('✅ Slide content saved successfully');
+    } catch (error) {
+      console.error('❌ Error saving slide content:', error);
+      // You might want to show a toast notification here
+    } finally {
+      setIsSavingContent(false);
     }
   };
 
@@ -295,8 +359,7 @@ export default function SlidesPreview({ slides, sessionId }: SlidesPreviewProps)
                     <button
                       onClick={(e) => {
                         e.stopPropagation();
-                        setSelectedSlide(slide);
-                        setEditingVisionInstructions(slide.visionInstructions || '');
+                        handleSlideClick(slide);
                       }}
                       className="p-2 text-blue-600 hover:bg-blue-50 rounded-lg transition-colors"
                       title="Edit & Regenerate"
@@ -439,15 +502,88 @@ export default function SlidesPreview({ slides, sessionId }: SlidesPreviewProps)
                 </div>
               </div>
 
-              {/* Generated Content */}
-              {selectedSlide.content && (
-                <div className="mb-4">
-                  <h4 className="font-semibold text-gray-900 mb-2">Generated Content</h4>
-                  <div className="bg-gray-50 rounded-lg p-4">
-                    <p className="text-gray-700 whitespace-pre-wrap">{selectedSlide.content}</p>
+              {/* Generated Content - Editable */}
+              <div className="mb-4">
+                <div className="flex items-center justify-between mb-2">
+                  <h4 className="font-semibold text-gray-900">Generated Content</h4>
+                  <div className="flex items-center gap-2">
+                    {!isEditingContent ? (
+                      <button
+                        onClick={() => setIsEditingContent(true)}
+                        className="flex items-center gap-1 px-3 py-1.5 text-sm bg-blue-100 hover:bg-blue-200 text-blue-700 rounded-lg transition-colors"
+                      >
+                        <Edit3 className="w-4 h-4" />
+                        Edit
+                      </button>
+                    ) : (
+                      <div className="flex items-center gap-2">
+                        <button
+                          onClick={() => {
+                            setIsEditingContent(false);
+                            setEditingContent(selectedSlide.content || '');
+                            setEditingTitle(selectedSlide.title || '');
+                          }}
+                          className="px-3 py-1.5 text-sm bg-gray-100 hover:bg-gray-200 text-gray-700 rounded-lg transition-colors"
+                        >
+                          Cancel
+                        </button>
+                        <button
+                          onClick={() => handleSaveContent(selectedSlide)}
+                          disabled={isSavingContent}
+                          className="flex items-center gap-1 px-3 py-1.5 text-sm bg-green-600 hover:bg-green-700 disabled:opacity-50 disabled:cursor-not-allowed text-white rounded-lg transition-colors"
+                        >
+                          {isSavingContent ? (
+                            <>
+                              <RefreshCw className="w-4 h-4 animate-spin" />
+                              Saving...
+                            </>
+                          ) : (
+                            'Save'
+                          )}
+                        </button>
+                      </div>
+                    )}
                   </div>
                 </div>
-              )}
+                
+                {isEditingContent ? (
+                  <div className="space-y-3">
+                    <div>
+                      <label className="block text-sm font-medium text-gray-700 mb-1">
+                        Title
+                      </label>
+                      <input
+                        type="text"
+                        value={editingTitle}
+                        onChange={(e) => setEditingTitle(e.target.value)}
+                        className="w-full p-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                        placeholder="Enter slide title..."
+                      />
+                    </div>
+                    <div>
+                      <label className="block text-sm font-medium text-gray-700 mb-1">
+                        Content
+                      </label>
+                      <textarea
+                        value={editingContent}
+                        onChange={(e) => setEditingContent(e.target.value)}
+                        className="w-full p-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 resize-none"
+                        rows={8}
+                        placeholder="Enter slide content..."
+                      />
+                    </div>
+                  </div>
+                ) : (
+                  <div className="bg-gray-50 rounded-lg p-4">
+                    {selectedSlide.title && (
+                      <h5 className="font-medium text-gray-900 mb-2">{selectedSlide.title}</h5>
+                    )}
+                    <p className="text-gray-700 whitespace-pre-wrap">
+                      {selectedSlide.content || 'No content available'}
+                    </p>
+                  </div>
+                )}
+              </div>
             </div>
           </div>
         </div>
