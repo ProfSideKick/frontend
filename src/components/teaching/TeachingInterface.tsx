@@ -796,23 +796,8 @@ export default function TeachingInterface({ classSession, onEndSession, sessionR
       if (prevSlide < classSession.slides.length - 1) {
         const newSlide = prevSlide + 1;
         
-        // Notify AI about manual slide change using conversation.item.create
-        const slideChangeMessage = {
-          type: "conversation.item.create",
-          item: {
-            type: "message",
-            role: "system",
-            content: [
-              {
-                type: "input_text",
-                text: `[SLIDE CHANGE] User manually navigated to slide ${newSlide + 1}.: "${classSession.slides[newSlide]?.title || 'Unknown'}". Previous slide was ${prevSlide + 1}. Let's discuss the new slide content.`
-              }
-            ]
-          }
-        };
-        
-        console.log(`📤 Notifying AI of manual slide change to slide ${newSlide + 1}`);
-        sendClientEvent(slideChangeMessage, "slide.manual_navigation");
+        // Use the helper function to notify AI as user input
+        notifyAIOfSlideChange(newSlide, prevSlide, "manual_navigation");
         
         return newSlide;
       }
@@ -825,23 +810,8 @@ export default function TeachingInterface({ classSession, onEndSession, sessionR
       if (prevSlide > 0) {
         const newSlide = prevSlide - 1;
         
-        // Notify AI about manual slide change using conversation.item.create
-        const slideChangeMessage = {
-          type: "conversation.item.create",
-          item: {
-            type: "message",
-            role: "system",
-            content: [
-              {
-                type: "input_text",
-                text: `[SLIDE CHANGE] User manually navigated to slide ${newSlide + 1}.: "${classSession.slides[newSlide]?.title || 'Unknown'}". Previous slide was ${prevSlide + 1}. Let's discuss the new slide content.`
-              }
-            ]
-          }
-        };
-        
-        console.log(`📤 Notifying AI of manual slide change to slide ${newSlide + 1}`);
-        sendClientEvent(slideChangeMessage, "slide.manual_navigation");
+        // Use the helper function to notify AI as user input
+        notifyAIOfSlideChange(newSlide, prevSlide, "manual_navigation");
         
         return newSlide;
       }
@@ -902,22 +872,64 @@ export default function TeachingInterface({ classSession, onEndSession, sessionR
 
   // Helper function to notify AI about programmatic slide changes
   const notifyAIOfSlideChange = (newSlide: number, previousSlide: number, source: string = "programmatic") => {
+    console.log(`📤 Notifying AI of ${source} slide change to slide ${newSlide + 1} - interrupting if speaking`);
+    
+    // Step 1: If AI is speaking, force interrupt the current response
+    if (isAISpeaking) {
+      console.log('🛑 AI is speaking, forcing interruption for slide change');
+      
+      // First, cancel the current response
+      sendClientEvent({
+        type: "response.cancel"
+      }, `slide.${source}.cancel_response`);
+      
+      // Then clear the output audio buffer to stop playback immediately
+      // This is the key step that actually stops the audio from continuing
+      sendClientEvent({
+        type: "output_audio_buffer.clear"
+      }, `slide.${source}.clear_audio_buffer`);
+      
+      // Small delay to ensure interruption is processed
+      setTimeout(() => {
+        sendSlideChangeNotification(newSlide, previousSlide, source);
+      }, 50);
+    } else {
+      // AI is not speaking, send notification immediately
+      sendSlideChangeNotification(newSlide, previousSlide, source);
+    }
+  };
+
+  // Helper function to send the actual slide change notification
+  const sendSlideChangeNotification = (newSlide: number, previousSlide: number, source: string) => {
+    // Send as user message to simulate speech input
     const slideChangeMessage = {
       type: "conversation.item.create",
       item: {
         type: "message",
-        role: "system",
+        role: "user",
         content: [
           {
             type: "input_text",
-            text: `[SLIDE CHANGE] Slide changed via ${source} to slide ${newSlide + 1} of ${classSession.slides.length}: "${classSession.slides[newSlide]?.title || 'Unknown'}". Previous slide was ${previousSlide + 1}. This context update helps you understand the current presentation position.`
+            text: `Stop, I just changed to slide ${newSlide + 1}, "${classSession.slides[newSlide]?.title || 'Unknown'}". Acknowledge naturally and continue with the lesson.`
           }
         ]
       }
     };
     
-    console.log(`📤 Notifying AI of ${source} slide change to slide ${newSlide + 1}`);
     sendClientEvent(slideChangeMessage, `slide.${source}`);
+    
+    // Trigger immediate response to the slide change
+    const triggerResponse = {
+      type: "response.create",
+      response: {
+        modalities: ["text", "audio"]
+      }
+    };
+    
+    // Small delay to ensure the message is processed before triggering response
+    setTimeout(() => {
+      sendClientEvent(triggerResponse, `slide.${source}.trigger_response`);
+    }, 100);
   };
 
   useEffect(() => {
