@@ -1,9 +1,9 @@
 "use client";
 
 import React, { useEffect, useRef, useState, useCallback } from "react";
-import { ChevronLeft, ChevronRight, Volume2, VolumeX, Phone, PhoneOff, Mic, MicOff } from "lucide-react";
-import { ClassSession  } from "@/types";
-// import { useTranscript } from "@/contexts/TranscriptContext";
+import { ChevronLeft, ChevronRight, Volume2, VolumeX, Phone, PhoneOff, Mic, MicOff, MessageSquare, ChevronUp, ChevronDown } from "lucide-react";
+import { ClassSession, SessionStatus,  } from "@/types";
+import { useTranscript } from "@/contexts/TranscriptContext";
 import { useEvent } from "@/contexts/EventContext";
 import { useHandleServerEvent } from "@/hooks/useHandleServerEvent";
 import { createRealtimeConnection } from "@/lib/realtimeConnection";
@@ -39,6 +39,8 @@ export default function TeachingInterface({ classSession, onEndSession, sessionR
     issues: "",
     suggestions: ""
   });
+  const [showCaptions, setShowCaptions] = useState(true);
+  const captionScrollRef = useRef<HTMLDivElement>(null);
   
   const pcRef = useRef<RTCPeerConnection | null>(null);
   const dcRef = useRef<RTCDataChannel | null>(null);
@@ -50,7 +52,7 @@ export default function TeachingInterface({ classSession, onEndSession, sessionR
   const isIntentionallyDisconnectedRef = useRef(false);
   const connectionLockRef = useRef(false); // Prevent simultaneous connections
 
-  // const { transcriptItems, addTranscriptMessage, addTranscriptBreadcrumb } = useTranscript();
+  const { transcriptItems, addTranscriptMessage, addTranscriptBreadcrumb } = useTranscript();
   const { logClientEvent,  } = useEvent();
 
   const sendClientEvent = (eventObj: any, eventNameSuffix = "") => {
@@ -703,10 +705,10 @@ export default function TeachingInterface({ classSession, onEndSession, sessionR
   };
 
   const initializeSession = () => {
-    if (sessionStatus !== "CONNECTED") {
-      console.log("⚠️ Cannot initialize session - not connected");
-      return;
-    }
+    // if (sessionStatus !== "CONNECTED") {
+    //   console.log("⚠️ Cannot initialize session - not connected");
+    //   return;
+    // }
 
     console.log("🔧 Initializing session with slide navigation tools...");
 
@@ -1158,6 +1160,14 @@ export default function TeachingInterface({ classSession, onEndSession, sessionR
     }
   }, [currentSlide, isHydrated]);
 
+  // Auto-scroll captions when new messages arrive
+  useEffect(() => {
+    if (captionScrollRef.current && showCaptions) {
+      const scrollElement = captionScrollRef.current;
+      scrollElement.scrollTop = scrollElement.scrollHeight;
+    }
+  }, [transcriptItems, showCaptions]);
+
   const currentSlideData = classSession.slides[currentSlide];
 
   // Fix image URL to ensure it points to backend server
@@ -1358,8 +1368,86 @@ export default function TeachingInterface({ classSession, onEndSession, sessionR
           </div>
         </div>
 
-        {/* Spacer */}
-        <div className="flex-1"></div>
+        {/* Real-time Captions Section */}
+        <div className="flex-1 flex flex-col min-h-0">
+          <div className="px-4 py-3 border-b border-slate-200/50">
+            <button
+              onClick={() => setShowCaptions(!showCaptions)}
+              className="flex items-center justify-between w-full text-left"
+            >
+              <div className="flex items-center gap-2">
+                <MessageSquare size={16} className="text-slate-600" />
+                <span className="text-sm font-medium text-slate-900">Live Captions</span>
+              </div>
+              {showCaptions ? <ChevronUp size={16} className="text-slate-600" /> : <ChevronDown size={16} className="text-slate-600" />}
+            </button>
+          </div>
+          
+          {showCaptions && (
+            <div className="flex-1 flex flex-col min-h-0">
+              <div
+                ref={captionScrollRef}
+                className="flex-1 overflow-y-auto p-3 space-y-2 bg-slate-50/50"
+              >
+                {transcriptItems.length === 0 ? (
+                  <div className="text-center py-8">
+                    <MessageSquare size={24} className="text-slate-400 mx-auto mb-2" />
+                    <p className="text-xs text-slate-500">
+                      Conversation will appear here
+                    </p>
+                  </div>
+                ) : (
+                  transcriptItems
+                    .filter(item => item.type === "MESSAGE" && !item.isHidden)
+                    .map((item) => {
+                      const isUser = item.role === "user";
+                      const isComplete = item.status === "DONE";
+                      const messageText = item.title || "";
+                      
+                      // Handle special transcript states
+                      const isTranscribing = messageText === "[Transcribing...]";
+                      const isInaudible = messageText === "[inaudible]";
+                      
+                      return (
+                        <div
+                          key={item.itemId}
+                          className={`flex ${isUser ? 'justify-end' : 'justify-start'}`}
+                        >
+                          <div
+                            className={`max-w-[85%] px-3 py-2 rounded-lg text-xs ${
+                              isUser 
+                                ? 'bg-blue-500 text-white' 
+                                : 'bg-white text-slate-900 border border-slate-200'
+                            } ${
+                              !isComplete ? 'animate-pulse' : ''
+                            }`}
+                          >
+                            <div className="flex items-center gap-2 mb-1">
+                              <span className={`font-medium ${isUser ? 'text-blue-100' : 'text-slate-600'}`}>
+                                {isUser ? 'You' : 'AI'}
+                              </span>
+                              <span className={`text-xs ${isUser ? 'text-blue-200' : 'text-slate-400'}`}>
+                                {new Date(item.createdAtMs).toLocaleTimeString([], { 
+                                  hour: '2-digit', 
+                                  minute: '2-digit',
+                                  second: '2-digit' 
+                                })}
+                              </span>
+                            </div>
+                            <div className={`${
+                              isTranscribing || isInaudible ? 'italic opacity-70' : ''
+                            }`}>
+                              {messageText || (isUser ? 'Speaking...' : 'Thinking...')}
+                            </div>
+                          </div>
+                        </div>
+                      );
+                    })
+                )}
+              </div>
+            </div>
+          )}
+        </div>
 
         {/* Controls */}
         <div className="p-4 space-y-3 border-t border-slate-200/50">
