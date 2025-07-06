@@ -2,7 +2,7 @@
 
 import React, { useEffect, useRef, useState, useCallback } from "react";
 import { ChevronLeft, ChevronRight, Volume2, VolumeX, Phone, PhoneOff, Mic, MicOff, MessageSquare, ChevronUp, ChevronDown } from "lucide-react";
-import { ClassSession, SessionStatus,  } from "@/types";
+import { ClassSession,  } from "@/types";
 import { useTranscript } from "@/contexts/TranscriptContext";
 import { useEvent } from "@/contexts/EventContext";
 import { useHandleServerEvent } from "@/hooks/useHandleServerEvent";
@@ -52,7 +52,7 @@ export default function TeachingInterface({ classSession, onEndSession, sessionR
   const isIntentionallyDisconnectedRef = useRef(false);
   const connectionLockRef = useRef(false); // Prevent simultaneous connections
 
-  const { transcriptItems, addTranscriptMessage, addTranscriptBreadcrumb } = useTranscript();
+  const { transcriptItems } = useTranscript();
   const { logClientEvent,  } = useEvent();
 
   const sendClientEvent = (eventObj: any, eventNameSuffix = "") => {
