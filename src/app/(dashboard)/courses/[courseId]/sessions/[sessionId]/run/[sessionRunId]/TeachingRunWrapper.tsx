@@ -16,7 +16,7 @@ interface TeachingRunWrapperProps {
 
 export default function TeachingRunWrapper({ sessionRunDetails, courseId, sessionId }: TeachingRunWrapperProps) {
   const router = useRouter();
-  const { token,  } = useAuth();
+  const { token, user } = useAuth();
 
   // Check for previously stored slide position
   const getStoredSlidePosition = () => {

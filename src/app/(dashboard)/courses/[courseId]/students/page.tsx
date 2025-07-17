@@ -2,7 +2,7 @@
 
 import React, { useState, useEffect } from 'react';
 import { useParams, useRouter } from 'next/navigation';
-import { ArrowLeft, UserPlus, Search, MoreVertical, CheckCircle, XCircle, Clock, Trash2 } from 'lucide-react';
+import { ArrowLeft, UserPlus, Search, MoreVertical, CheckCircle, XCircle, Clock, Trash2, X } from 'lucide-react';
 import ProtectedRoute from '@/components/auth/ProtectedRoute';
 import { useAuth } from '@/contexts/AuthContext';
 import { config } from '@/lib/config';
@@ -34,6 +34,12 @@ interface CourseBasic {
   code?: string;
 }
 
+interface Toast {
+  id: string;
+  type: 'success' | 'error';
+  message: string;
+}
+
 export default function ManageStudentsPage() {
   const params = useParams();
   const router = useRouter();
@@ -50,10 +56,28 @@ export default function ManageStudentsPage() {
   const [searchTerm, setSearchTerm] = useState('');
   const [showEnrollModal, setShowEnrollModal] = useState(false);
   const [enrollEmail, setEnrollEmail] = useState('');
-  const [enrollEmails, setEnrollEmails] = useState<string[]>([]);
-  const [enrollingStudents, setEnrollingStudents] = useState(false);
+  const [enrollingStudent, setEnrollingStudent] = useState(false);
   const [selectedStudent, setSelectedStudent] = useState<Student | null>(null);
   const [showRemoveConfirm, setShowRemoveConfirm] = useState(false);
+  
+  // Toast notifications
+  const [toasts, setToasts] = useState<Toast[]>([]);
+
+  // Toast functions
+  const addToast = (type: 'success' | 'error', message: string) => {
+    const id = Math.random().toString(36).substr(2, 9);
+    const newToast = { id, type, message };
+    setToasts(prev => [...prev, newToast]);
+    
+    // Auto remove after 5 seconds
+    setTimeout(() => {
+      removeToast(id);
+    }, 5000);
+  };
+
+  const removeToast = (id: string) => {
+    setToasts(prev => prev.filter(toast => toast.id !== id));
+  };
 
   // Fetch data
   useEffect(() => {
@@ -128,33 +152,29 @@ export default function ManageStudentsPage() {
   );
 
   // Handle student enrollment
-  const handleEnrollStudents = async () => {
-    if (enrollEmails.length === 0 && !enrollEmail.trim()) {
-      alert('Please enter at least one email address');
+  const handleEnrollStudent = async () => {
+    if (!enrollEmail.trim()) {
+      addToast('error', 'Please enter an email address');
       return;
     }
 
-    setEnrollingStudents(true);
+    setEnrollingStudent(true);
     
     try {
-      const emailsToEnroll = enrollEmails.length > 0 ? enrollEmails : [enrollEmail.trim()];
-      
-      for (const email of emailsToEnroll) {
-        const response = await fetch(config.getApiUrl(`/api/courses/${courseId}/enroll`), {
-          method: 'POST',
-          headers: {
-            'Authorization': `Bearer ${token}`,
-            'Content-Type': 'application/json',
-          },
-          body: JSON.stringify({
-            email: email.trim()
-          }),
-        });
+      const response = await fetch(config.getApiUrl(`/api/courses/${courseId}/enroll`), {
+        method: 'POST',
+        headers: {
+          'Authorization': `Bearer ${token}`,
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          email: enrollEmail.trim()
+        }),
+      });
 
-        if (!response.ok) {
-          const errorData = await response.json();
-          throw new Error(errorData.error || `Failed to enroll ${email}`);
-        }
+      if (!response.ok) {
+        const errorData = await response.json();
+        throw new Error(errorData.message || 'Failed to enroll student');
       }
 
       // Refresh students list
@@ -181,17 +201,16 @@ export default function ManageStudentsPage() {
         setStudents(transformedStudents);
       }
 
-      // Reset form
+      // Show success message and reset form
+      addToast('success', `Successfully enrolled ${enrollEmail.trim()}!`);
       setEnrollEmail('');
-      setEnrollEmails([]);
       setShowEnrollModal(false);
-      alert(`Successfully enrolled ${emailsToEnroll.length} student${emailsToEnroll.length > 1 ? 's' : ''}!`);
 
     } catch (err) {
-      alert(err instanceof Error ? err.message : 'Failed to enroll students');
-      console.error('Error enrolling students:', err);
+      addToast('error', (err as Error).message || 'Failed to enroll student');
+      console.error('Error enrolling student:', err);
     } finally {
-      setEnrollingStudents(false);
+      setEnrollingStudent(false);
     }
   };
 
@@ -215,27 +234,14 @@ export default function ManageStudentsPage() {
 
       // Remove from local state
       setStudents(prev => prev.filter(s => s.id !== selectedStudent.id));
+      addToast('success', `Successfully removed ${selectedStudent.full_name || selectedStudent.email} from the course`);
       setShowRemoveConfirm(false);
       setSelectedStudent(null);
 
     } catch (err) {
-      alert(err instanceof Error ? err.message : 'Failed to remove student');
+      addToast('error', err instanceof Error ? err.message : 'Failed to remove student');
       console.error('Error removing student:', err);
     }
-  };
-
-  // Add email to batch enrollment
-  const addEmailToEnroll = () => {
-    const email = enrollEmail.trim();
-    if (email && !enrollEmails.includes(email)) {
-      setEnrollEmails(prev => [...prev, email]);
-      setEnrollEmail('');
-    }
-  };
-
-  // Remove email from batch enrollment
-  const removeEmailFromEnroll = (email: string) => {
-    setEnrollEmails(prev => prev.filter(e => e !== email));
   };
 
   const formatDate = (dateString: string) => {
@@ -291,6 +297,35 @@ export default function ManageStudentsPage() {
   return (
     <ProtectedRoute>
       <div className="min-h-screen bg-gradient-to-br from-blue-50 to-indigo-100">
+        {/* Toast Notifications */}
+        <div className="fixed top-4 right-4 z-50 space-y-2">
+          {toasts.map((toast) => (
+            <div
+              key={toast.id}
+              className={`flex items-center justify-between p-4 rounded-lg shadow-lg max-w-sm transform transition-all duration-300 ease-in-out ${
+                toast.type === 'success'
+                  ? 'bg-green-600 text-white'
+                  : 'bg-red-600 text-white'
+              }`}
+            >
+              <div className="flex items-center gap-3">
+                {toast.type === 'success' ? (
+                  <CheckCircle className="w-5 h-5" />
+                ) : (
+                  <XCircle className="w-5 h-5" />
+                )}
+                <span className="text-sm font-medium">{toast.message}</span>
+              </div>
+              <button
+                onClick={() => removeToast(toast.id)}
+                className="ml-3 p-1 hover:bg-white hover:bg-opacity-20 rounded transition-colors"
+              >
+                <X className="w-4 h-4" />
+              </button>
+            </div>
+          ))}
+        </div>
+
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-12">
           {/* Header */}
           <div className="mb-8">
@@ -315,7 +350,7 @@ export default function ManageStudentsPage() {
                   className="flex items-center gap-2 bg-blue-600 text-white px-6 py-3 rounded-lg font-medium hover:bg-blue-700 focus:ring-2 focus:ring-blue-500 focus:ring-offset-2 transition-colors"
                 >
                   <UserPlus className="w-5 h-5" />
-                  Enroll Students
+                  Enroll Student
                 </button>
               </div>
             </div>
@@ -439,74 +474,48 @@ export default function ManageStudentsPage() {
       {showEnrollModal && (
         <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center p-4 z-50">
           <div className="bg-white rounded-2xl p-8 max-w-md w-full">
-            <h3 className="text-2xl font-bold text-gray-900 mb-6">Enroll Students</h3>
+            <h3 className="text-2xl font-bold text-gray-900 mb-6">Enroll Student</h3>
             
             <div className="space-y-4">
               <div>
                 <label className="block text-sm font-medium text-gray-700 mb-2">
-                  Email Address
+                  Student Email Address
                 </label>
-                <div className="flex gap-2">
-                  <input
-                    type="email"
-                    value={enrollEmail}
-                    onChange={(e) => setEnrollEmail(e.target.value)}
-                    placeholder="student@university.edu"
-                    className="flex-1 px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
-                    onKeyPress={(e) => e.key === 'Enter' && addEmailToEnroll()}
-                  />
-                  <button
-                    onClick={addEmailToEnroll}
-                    className="px-4 py-2 bg-gray-100 text-gray-700 rounded-lg hover:bg-gray-200 transition-colors"
-                  >
-                    Add
-                  </button>
-                </div>
+                <input
+                  type="email"
+                  value={enrollEmail}
+                  onChange={(e) => setEnrollEmail(e.target.value)}
+                  placeholder="student@university.edu"
+                  className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                  onKeyPress={(e) => e.key === 'Enter' && !enrollingStudent && handleEnrollStudent()}
+                />
                 <p className="text-xs text-gray-500 mt-1">
-                  Press Enter or click Add to include multiple emails
+                  Enter the email address of the student you want to enroll
                 </p>
               </div>
-
-              {enrollEmails.length > 0 && (
-                <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-2">
-                    Emails to Enroll ({enrollEmails.length})
-                  </label>
-                  <div className="space-y-2 max-h-32 overflow-y-auto">
-                    {enrollEmails.map((email) => (
-                      <div key={email} className="flex items-center justify-between p-2 bg-gray-50 rounded-lg">
-                        <span className="text-sm text-gray-700">{email}</span>
-                        <button
-                          onClick={() => removeEmailFromEnroll(email)}
-                          className="text-red-500 hover:text-red-700 transition-colors"
-                        >
-                          <XCircle className="w-4 h-4" />
-                        </button>
-                      </div>
-                    ))}
-                  </div>
-                </div>
-              )}
             </div>
 
             <div className="flex gap-3 mt-8">
               <button
-                onClick={() => setShowEnrollModal(false)}
+                onClick={() => {
+                  setShowEnrollModal(false);
+                  setEnrollEmail('');
+                }}
                 className="flex-1 px-4 py-2 border border-gray-300 text-gray-700 rounded-lg hover:bg-gray-50 transition-colors"
               >
                 Cancel
               </button>
               <button
-                onClick={handleEnrollStudents}
-                disabled={enrollingStudents || (enrollEmails.length === 0 && !enrollEmail.trim())}
+                onClick={handleEnrollStudent}
+                disabled={enrollingStudent || !enrollEmail.trim()}
                 className="flex-1 flex items-center justify-center gap-2 px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
               >
-                {enrollingStudents ? (
+                {enrollingStudent ? (
                   <div className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin"></div>
                 ) : (
                   <UserPlus className="w-4 h-4" />
                 )}
-                Enroll Student{enrollEmails.length > 1 ? 's' : ''}
+                Enroll Student
               </button>
             </div>
           </div>
