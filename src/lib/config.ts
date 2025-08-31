@@ -2,7 +2,7 @@
 export const config = {
   // Backend API URL
   isLocal: process.env.NEXT_PUBLIC_IS_LOCAL === 'true',
-  backendUrl: process.env.NEXT_PUBLIC_BACKEND_URL || 'https://profsidekick-backend.fly.dev',
+  backendUrl: process.env.NEXT_PUBLIC_BACKEND_URL || 'https://backend-production-1d79.up.railway.app',
   
   // Frontend URL (for redirects, CORS, etc.)
   appUrl: process.env.NEXT_PUBLIC_APP_URL || 'http://localhost:3000',
