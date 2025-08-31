@@ -6,7 +6,7 @@ import { ClassSession,  } from "@/types";
 import { useTranscript } from "@/contexts/TranscriptContext";
 import { useEvent } from "@/contexts/EventContext";
 import { useHandleServerEvent } from "@/hooks/useHandleServerEvent";
-import { createRealtimeConnection } from "@/lib/realtimeConnection";
+import { createRealtimeConnection, checkWebRTCSupport } from "@/lib/realtimeConnection";
 import teachingAssistant from "@/constants/teachingAssistant";
 import { config } from "@/lib/config";
 
@@ -269,6 +269,25 @@ export default function TeachingInterface({ classSession, onEndSession, sessionR
         (dc as any)._messageHandler = dataChannelMessageHandler;
       } catch (err) {
         console.error("Error connecting to realtime:", err);
+        
+        // Provide specific error message for getUserMedia issues
+        let errorMessage = "Error connecting to realtime";
+        if (err instanceof Error) {
+          if (err.message.includes('getUserMedia') || err.message.includes('HTTPS')) {
+            errorMessage = "Microphone access requires HTTPS. Please ensure you're using a secure connection.";
+          } else if (err.message.includes('Permission denied')) {
+            errorMessage = "Microphone permission denied. Please allow microphone access and try again.";
+          } else {
+            errorMessage = err.message;
+          }
+        }
+        
+        // Set error status with message
+        setSessionStatus("ERROR");
+        setIsConnecting(false);
+        
+        // Show error to user
+        alert(errorMessage);
         
         // Clean up any partial connections
         if (mediaStreamRef.current) {
@@ -931,6 +950,17 @@ export default function TeachingInterface({ classSession, onEndSession, sessionR
       sendClientEvent(triggerResponse, `slide.${source}.trigger_response`);
     }, 100);
   };
+
+  // Check WebRTC support on mount
+  useEffect(() => {
+    const supportCheck = checkWebRTCSupport();
+    if (!supportCheck.supported && typeof window !== 'undefined') {
+      console.warn('WebRTC compatibility issue:', supportCheck.error);
+      setSessionStatus("ERROR");
+      // Show user-friendly error immediately
+      alert(supportCheck.error || 'WebRTC not supported in this browser');
+    }
+  }, []);
 
   useEffect(() => {
     const effectId = Math.random().toString(36).substr(2, 6);

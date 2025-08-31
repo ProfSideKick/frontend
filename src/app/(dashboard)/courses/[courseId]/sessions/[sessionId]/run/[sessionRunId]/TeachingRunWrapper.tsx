@@ -1,7 +1,7 @@
 "use client";
 
 import React, {  } from "react";
-import { useRouter } from "next/navigation";
+import { useRouter, useSearchParams } from "next/navigation";
 import TeachingInterface from "@/components/teaching/TeachingInterface";
 import { SessionRunDetails } from "@/types/types";
 import { useAuth } from "@/contexts/AuthContext";
@@ -16,6 +16,8 @@ interface TeachingRunWrapperProps {
 
 export default function TeachingRunWrapper({ sessionRunDetails, courseId, sessionId }: TeachingRunWrapperProps) {
   const router = useRouter();
+  const searchParams = useSearchParams();
+  const isSharedLink = searchParams.get('shared') === 'true';
   const { token,  } = useAuth();
 
   // Check for previously stored slide position
@@ -40,13 +42,25 @@ export default function TeachingRunWrapper({ sessionRunDetails, courseId, sessio
         sessionStorage.removeItem(`session_${sessionRunDetails.sessionRunId}_currentSlide`);
       }
 
-      // End the session run with authentication
-      await fetch(config.getApiUrl(`/api/sessions/${sessionRunDetails.sessionId}/run/${sessionRunDetails.sessionRunId}/stop`), {
+      // Prepare headers based on user type
+      const headers: HeadersInit = {
+        "Content-Type": "application/json",
+      };
+
+      // Only add authorization for authenticated users
+      if (token && !isSharedLink) {
+        headers["Authorization"] = `Bearer ${token}`;
+      }
+
+      // Choose stop endpoint based on whether this is a shared link or authenticated user
+      const stopEndpoint = isSharedLink 
+        ? `/api/sessions/${sessionRunDetails.sessionId}/run/${sessionRunDetails.sessionRunId}/stop/guest`
+        : `/api/sessions/${sessionRunDetails.sessionId}/run/${sessionRunDetails.sessionRunId}/stop`;
+
+      // Stop the session run
+      await fetch(stopEndpoint, {
         method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-          "Authorization": `Bearer ${token}`,
-        },
+        headers,
         body: JSON.stringify({
           session_run_metadata: metadata || {
             ended_by_user: true
@@ -57,7 +71,10 @@ export default function TeachingRunWrapper({ sessionRunDetails, courseId, sessio
       console.error("Failed to end session run:", error);
     } finally {
       // Navigate back to session overview using new nested URL structure
-      router.push(`/courses/${courseId}/sessions/${sessionId}`);
+      const returnUrl = isSharedLink 
+        ? `/courses/${courseId}/sessions/${sessionId}?shared=true`
+        : `/courses/${courseId}/sessions/${sessionId}`;
+      router.push(returnUrl);
     }
   };
 
@@ -100,7 +117,7 @@ export default function TeachingRunWrapper({ sessionRunDetails, courseId, sessio
   };
 
   return (
-    <ProtectedRoute>
+    <ProtectedRoute requireAuth={!isSharedLink}>
       <TeachingInterface 
         classSession={classSession}
         onEndSession={handleEndSession}

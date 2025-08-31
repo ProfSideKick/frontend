@@ -1,30 +1,34 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { config } from '@/lib/config';
 
-export async function GET(request: NextRequest) {
+export async function POST(request: NextRequest) {
   try {
     const pathParts = request.nextUrl.pathname.split('/');
     const sessionId = pathParts[pathParts.indexOf('sessions') + 1];
-    const sessionRunId = pathParts[pathParts.indexOf('runs') + 1];
+    const body = await request.json();
 
-    const response = await fetch(config.getApiUrl(`/api/sessions/${sessionId}/runs/${sessionRunId}`), {
-      method: 'GET',
+    // Guest endpoint - no authorization required
+    const response = await fetch(config.getApiUrl(`/api/sessions/${sessionId}/run/start/guest`), {
+      method: 'POST',
       headers: {
         'Content-Type': 'application/json',
       },
+      body: JSON.stringify(body),
     });
 
     if (!response.ok) {
+      const errorData = await response.text();
+      console.error('Backend error:', errorData);
       return NextResponse.json(
-        { error: 'Session run not found' },
-        { status: 404 }
+        { error: 'Failed to start guest session run' }, 
+        { status: response.status }
       );
     }
 
     const sessionRunData = await response.json();
     return NextResponse.json(sessionRunData);
   } catch (error) {
-    console.error('Error fetching session run:', error);
+    console.error('Error starting guest session run:', error);
     return NextResponse.json(
       { error: 'Internal server error' },
       { status: 500 }

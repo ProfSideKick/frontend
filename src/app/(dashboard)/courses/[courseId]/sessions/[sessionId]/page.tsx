@@ -2,8 +2,8 @@
 
 import React, { useState, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
-import { ChevronLeft, Play, Clock, Copy, Check, Calendar, Presentation, Settings2 } from 'lucide-react';
-import { useParams } from 'next/navigation';
+import { ChevronLeft, Play, Clock, Copy, Check, Calendar, Presentation, Settings2, Share2 } from 'lucide-react';
+import { useParams, useSearchParams } from 'next/navigation';
 import SessionRuns from '@/components/sessions/SessionRuns';
 import ProtectedRoute from '@/components/auth/ProtectedRoute';
 import AISettings from '@/components/sessions/AISettings';
@@ -39,8 +39,10 @@ interface SessionDetails {
 
 export default function SessionDetailsPage() {
   const params = useParams();
+  const searchParams = useSearchParams();
   const courseId = params.courseId as string;
   const sessionId = params.sessionId as string;
+  const isSharedLink = searchParams.get('shared') === 'true';
   const router = useRouter();
   const { token } = useAuth();
   const [copiedId, setCopiedId] = useState(false);
@@ -49,22 +51,28 @@ export default function SessionDetailsPage() {
   const [error, setError] = useState<string | null>(null);
   const [showAISettings, setShowAISettings] = useState(false);
   const [startingTeaching, setStartingTeaching] = useState(false);
+  const [linkCopied, setLinkCopied] = useState(false);
   const { user } = useAuth();
 
   // Fetch session details from backend
   useEffect(() => {
     const fetchSessionDetails = async () => {
-      if (!token) return;
+      if (!token && !isSharedLink) return;
       
       try {
         setLoading(true);
         setError(null);
         
+        const headers: HeadersInit = {
+          'Content-Type': 'application/json',
+        };
+        
+        if (token) {
+          headers['Authorization'] = `Bearer ${token}`;
+        }
+
         const response = await fetch(`/api/sessions/${sessionId}`, {
-          headers: {
-            'Authorization': `Bearer ${token}`,
-            'Content-Type': 'application/json',
-          },
+          headers,
         });
         
         if (!response.ok) {
@@ -126,13 +134,25 @@ export default function SessionDetailsPage() {
     try {
       setStartingTeaching(true);
       
+      // Choose endpoint based on whether this is a shared link or authenticated user
+      const endpoint = isSharedLink 
+        ? `/api/sessions/${sessionId}/run/start/guest`
+        : `/api/sessions/${sessionId}/run/start`;
+      
+      // Prepare headers
+      const headers: HeadersInit = {
+        'Content-Type': 'application/json',
+      };
+      
+      // Only add authorization for authenticated users
+      if (token && !isSharedLink) {
+        headers['Authorization'] = `Bearer ${token}`;
+      }
+      
       // Create a new session run
-      const response = await fetch(`/api/sessions/${sessionId}/run/start`, {
+      const response = await fetch(endpoint, {
         method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          'Authorization': `Bearer ${token}`,
-        },
+        headers,
         body: JSON.stringify({
           assistant_parameters: sessionDetails?.assistantParameters || {},
         }),
@@ -149,7 +169,11 @@ export default function SessionDetailsPage() {
       
       // Navigate to the new teaching run with updated URL structure
       if (result.sessionRunId) {
-        router.push(`/courses/${courseId}/sessions/${sessionId}/run/${result.sessionRunId}`);
+        // Include shared parameter for guest users
+        const runUrl = isSharedLink 
+          ? `/courses/${courseId}/sessions/${sessionId}/run/${result.sessionRunId}?shared=true`
+          : `/courses/${courseId}/sessions/${sessionId}/run/${result.sessionRunId}`;
+        router.push(runUrl);
       } else {
         console.error('No sessionRunId returned from API:', result);
         throw new Error('No sessionRunId returned from backend');
@@ -167,22 +191,51 @@ export default function SessionDetailsPage() {
     router.push(`/courses/${courseId}`);
   };
 
+  const handleCopySessionLink = async () => {
+    const currentUrl = window.location.origin;
+    const shareableUrl = `${currentUrl}/courses/${courseId}/sessions/${sessionId}?shared=true`;
+    
+    try {
+      await navigator.clipboard.writeText(shareableUrl);
+      setLinkCopied(true);
+      setTimeout(() => setLinkCopied(false), 2000); // Reset after 2 seconds
+    } catch (error) {
+      console.error('Failed to copy link:', error);
+      // Fallback for older browsers
+      const textArea = document.createElement('textarea');
+      textArea.value = shareableUrl;
+      document.body.appendChild(textArea);
+      textArea.select();
+      document.execCommand('copy');
+      document.body.removeChild(textArea);
+      setLinkCopied(true);
+      setTimeout(() => setLinkCopied(false), 2000);
+    }
+  };
+
   return (
-    <ProtectedRoute>
+    <ProtectedRoute requireAuth={!isSharedLink}>
       <div className="min-h-screen bg-gradient-to-br from-blue-50 to-indigo-100 p-6">
         <div className="max-w-7xl mx-auto">
           {/* Header */}
           <div className="flex items-center justify-between mb-8">
             <div className="flex items-center space-x-4">
-              <button
-                onClick={handleBackToCourse}
-                className="p-2 hover:bg-white/50 rounded-lg transition-colors"
-              >
-                <ChevronLeft className="w-6 h-6 text-gray-700" />
-              </button>
+              {!isSharedLink && (
+                <button
+                  onClick={handleBackToCourse}
+                  className="p-2 hover:bg-white/50 rounded-lg transition-colors"
+                >
+                  <ChevronLeft className="w-6 h-6 text-gray-700" />
+                </button>
+              )}
               <div>
                 <h1 className="text-3xl font-bold text-gray-900">Session Details</h1>
                 <p className="text-gray-600">Course: {sessionDetails?.classDetails.courseName || 'Loading...'}</p>
+                {isSharedLink && (
+                  <p className="text-sm text-blue-600 mt-1">
+                    👋 You're viewing a shared session. Start learning with AI!
+                  </p>
+                )}
               </div>
             </div>
             
@@ -203,6 +256,9 @@ export default function SessionDetailsPage() {
                     <span>Start Teaching</span>
                   )}
                   {user?.role === 'student' && (
+                    <span>Start Learning with AI</span>
+                  )}
+                  {isSharedLink && (
                     <span>Start Learning with AI</span>
                   )}
                 </>
@@ -297,7 +353,7 @@ export default function SessionDetailsPage() {
                   )}
 
                   {/* Session Runs */}
-                  {user?.role === 'professor' && (
+                  {user?.role === 'professor' && !isSharedLink && (
                   <SessionRuns 
                     sessionId={sessionId} 
                     courseId={courseId}
@@ -326,6 +382,9 @@ export default function SessionDetailsPage() {
                     {user?.role === 'student' && (
                       <span>Start Learning with AI</span>
                     )}
+                    {isSharedLink && (
+                      <span>Start Learning with AI</span>
+                    )}
                   </button>
                   {/* AI Settings */}
                   {user?.role === 'professor' && (
@@ -335,6 +394,25 @@ export default function SessionDetailsPage() {
                   >
                     <Settings2 className="w-4 h-4" />
                     AI Settings
+                  </button>
+                  )}
+                  {/* Copy Session Link */}
+                  {user?.role === 'professor' && (
+                  <button
+                    onClick={handleCopySessionLink}
+                    className="w-full flex items-center justify-center gap-2 px-4 py-3 border border-gray-300 text-gray-700 rounded-lg hover:bg-gray-50 transition-colors"
+                  >
+                    {linkCopied ? (
+                      <>
+                        <Check className="w-4 h-4 text-green-600" />
+                        <span className="text-green-600">Link Copied!</span>
+                      </>
+                    ) : (
+                      <>
+                        <Share2 className="w-4 h-4" />
+                        Copy Session Link
+                      </>
+                    )}
                   </button>
                   )}
                 </div>
