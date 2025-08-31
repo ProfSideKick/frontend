@@ -6,7 +6,7 @@ import TeachingInterface from "@/components/teaching/TeachingInterface";
 import { SessionRunDetails } from "@/types/types";
 import { useAuth } from "@/contexts/AuthContext";
 import ProtectedRoute from "@/components/auth/ProtectedRoute";
-import { config } from "@/lib/config";
+// import { config } from "@/lib/config";
 
 interface TeachingRunWrapperProps {
   sessionRunDetails: SessionRunDetails;

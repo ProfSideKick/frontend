@@ -233,7 +233,7 @@ export default function SessionDetailsPage() {
                 <p className="text-gray-600">Course: {sessionDetails?.classDetails.courseName || 'Loading...'}</p>
                 {isSharedLink && (
                   <p className="text-sm text-blue-600 mt-1">
-                    👋 You're viewing a shared session. Start learning with AI!
+                    👋 You are viewing a shared session. Start learning with AI!
                   </p>
                 )}
               </div>
