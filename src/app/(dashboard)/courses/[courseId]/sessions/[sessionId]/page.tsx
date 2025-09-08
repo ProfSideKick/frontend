@@ -8,6 +8,7 @@ import SessionRuns from '@/components/sessions/SessionRuns';
 import ProtectedRoute from '@/components/auth/ProtectedRoute';
 import AISettings from '@/components/sessions/AISettings';
 import SlidesPreview from '@/components/sessions/SlidesPreview';
+import SessionMaterials from '@/components/sessions/SessionMaterials';
 // import { config } from '@/lib/config';
 import { useAuth } from '@/contexts/AuthContext';
 
@@ -350,6 +351,16 @@ export default function SessionDetailsPage() {
                       sessionId={sessionId}
                     //   presentationDetails={sessionDetails.presentationDetails}
                     />
+                  )}
+
+                  {/* Session Materials */}
+                  {user?.role === 'professor' && !isSharedLink && (
+                    <div className="bg-white rounded-xl p-6 shadow-sm">
+                      <SessionMaterials 
+                        sessionId={sessionId} 
+                        courseId={courseId}
+                      />
+                    </div>
                   )}
 
                   {/* Session Runs */}
