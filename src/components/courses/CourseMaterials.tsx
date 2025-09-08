@@ -61,7 +61,7 @@ export default function CourseMaterials({ courseId }: CourseMaterialsProps) {
       setLoading(true);
       setError(null);
 
-      const response = await fetch(config.getApiUrl(`/api/courses/${courseId}/materials`), {
+      const response = await fetch(config.getApiUrl(`/api/course-materials/courses/${courseId}`), {
         headers: {
           'Authorization': `Bearer ${token}`,
           'Content-Type': 'application/json',
@@ -109,7 +109,7 @@ export default function CourseMaterials({ courseId }: CourseMaterialsProps) {
         if (materialForm.doi) formData.append('doi', materialForm.doi);
         formData.append('is_required', materialForm.is_required.toString());
 
-        const response = await fetch(config.getApiUrl(`/api/courses/${courseId}/materials/upload`), {
+        const response = await fetch(config.getApiUrl(`/api/course-materials/courses/${courseId}/upload`), {
           method: 'POST',
           headers: {
             'Authorization': `Bearer ${token}`,
@@ -136,7 +136,7 @@ export default function CourseMaterials({ courseId }: CourseMaterialsProps) {
         }
       } else {
         // Create new material without file
-        const response = await fetch(config.getApiUrl(`/api/courses/${courseId}/materials`), {
+        const response = await fetch(config.getApiUrl(`/api/course-materials/courses/${courseId}`), {
           method: 'POST',
           headers: {
             'Authorization': `Bearer ${token}`,
@@ -166,7 +166,7 @@ export default function CourseMaterials({ courseId }: CourseMaterialsProps) {
     if (!token || !confirm('Are you sure you want to delete this material?')) return;
 
     try {
-      const response = await fetch(config.getApiUrl(`/api/materials/${materialId}`), {
+      const response = await fetch(config.getApiUrl(`/api/course-materials/${materialId}`), {
         method: 'DELETE',
         headers: {
           'Authorization': `Bearer ${token}`,

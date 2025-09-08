@@ -51,7 +51,7 @@ export default function SessionMaterials({ sessionId, courseId }: SessionMateria
       setLoading(true);
       setError(null);
 
-      const response = await fetch(config.getApiUrl(`/api/sessions/${sessionId}/materials`), {
+      const response = await fetch(config.getApiUrl(`/api/course-materials/sessions/${sessionId}`), {
         headers: {
           'Authorization': `Bearer ${token}`,
           'Content-Type': 'application/json',
@@ -77,7 +77,7 @@ export default function SessionMaterials({ sessionId, courseId }: SessionMateria
     if (!token) return;
     
     try {
-      const response = await fetch(config.getApiUrl(`/api/courses/${courseId}/materials`), {
+      const response = await fetch(config.getApiUrl(`/api/course-materials/courses/${courseId}`), {
         headers: {
           'Authorization': `Bearer ${token}`,
           'Content-Type': 'application/json',
@@ -140,7 +140,7 @@ export default function SessionMaterials({ sessionId, courseId }: SessionMateria
           is_included: true
         };
 
-        return fetch(config.getApiUrl(`/api/sessions/${sessionId}/materials`), {
+        return fetch(config.getApiUrl(`/api/course-materials/sessions/${sessionId}`), {
           method: 'POST',
           headers: {
             'Authorization': `Bearer ${token}`,
@@ -168,7 +168,7 @@ export default function SessionMaterials({ sessionId, courseId }: SessionMateria
     if (!token) return;
 
     try {
-      const response = await fetch(config.getApiUrl(`/api/session-materials/${sessionMaterialId}`), {
+      const response = await fetch(config.getApiUrl(`/api/course-materials/session-links/${sessionMaterialId}`), {
         method: 'PUT',
         headers: {
           'Authorization': `Bearer ${token}`,
@@ -193,7 +193,7 @@ export default function SessionMaterials({ sessionId, courseId }: SessionMateria
     if (!token) return;
 
     try {
-      const response = await fetch(config.getApiUrl(`/api/session-materials/${sessionMaterialId}`), {
+      const response = await fetch(config.getApiUrl(`/api/course-materials/session-links/${sessionMaterialId}`), {
         method: 'PUT',
         headers: {
           'Authorization': `Bearer ${token}`,
@@ -220,7 +220,7 @@ export default function SessionMaterials({ sessionId, courseId }: SessionMateria
     if (!token || !confirm('Remove this material from the session?')) return;
 
     try {
-      const response = await fetch(config.getApiUrl(`/api/session-materials/${sessionMaterialId}`), {
+      const response = await fetch(config.getApiUrl(`/api/course-materials/session-links/${sessionMaterialId}`), {
         method: 'DELETE',
         headers: {
           'Authorization': `Bearer ${token}`,
