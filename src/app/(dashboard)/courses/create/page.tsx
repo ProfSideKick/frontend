@@ -108,12 +108,13 @@ export default function CreateCoursePage() {
                   
                   <div>
                     <label htmlFor="code" className="block text-sm font-medium text-gray-700 mb-2">
-                      Course Code
+                      Course Code *
                     </label>
                     <input
                       type="text"
                       id="code"
                       name="code"
+                      required
                       value={formData.code}
                       onChange={handleInputChange}
                       placeholder="e.g., CS101"
@@ -270,7 +271,7 @@ export default function CreateCoursePage() {
                 </button>
                                   <button
                     type="submit"
-                    disabled={loading || !formData.name.trim()}
+                    disabled={loading || !formData.name.trim() || !formData.code.trim()}
                     className="px-8 py-3 bg-blue-600 text-white rounded-lg font-medium hover:bg-blue-700 focus:ring-2 focus:ring-blue-500 focus:ring-offset-2 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
                   >
                     {loading ? 'Creating...' : 'Create Course'}
