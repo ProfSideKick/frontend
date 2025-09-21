@@ -303,6 +303,7 @@ export default function AISettings({ sessionId, onClose }: AISettingsProps) {
               >
                 <option value="gpt-4o-realtime-preview-2024-12-17">GPT-4o Realtime</option>
                 <option value="gpt-4o-mini-realtime-preview-2024-12-17">GPT-4o Mini Realtime</option>
+                <option value="gpt-realtime">GPT Realtime</option>
               </select>
             </div>
 

@@ -509,6 +509,7 @@ export default function ClassCreation() {
                 <select data-path="assistant_parameters.model" id="assistant_parameters.model" value={classDetails.assistant_parameters.model} onChange={handleInputChange} className="w-full input-style">
                   <option value="gpt-4o-realtime-preview-2024-12-17">GPT-4o Realtime (Recommended)</option>
                   <option value="gpt-4o-mini-realtime-preview-2024-12-17">GPT-4o Mini Realtime</option>
+                  <option value="gpt-realtime">GPT Realtime</option>
                 </select>
               </div>
               <div>

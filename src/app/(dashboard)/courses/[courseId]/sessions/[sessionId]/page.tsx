@@ -168,6 +168,14 @@ export default function SessionDetailsPage() {
       const result = await response.json();
       console.log('Session run created:', result);
       
+      // Store the model information for the TeachingInterface to use
+      if (result.sessionRunId && result.assistantParameters?.model) {
+        sessionStorage.setItem(`session_run_model_${result.sessionRunId}`, result.assistantParameters.model);
+        console.log(`🎯 Stored model for session run: ${result.assistantParameters.model}`);
+      } else {
+        console.error('No model information returned from API:', result);
+      }
+      
       // Navigate to the new teaching run with updated URL structure
       if (result.sessionRunId) {
         // Include shared parameter for guest users

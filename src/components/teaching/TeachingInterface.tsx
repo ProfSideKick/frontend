@@ -191,10 +191,16 @@ export default function TeachingInterface({ classSession, onEndSession, sessionR
         const dataChannelId = Math.random().toString(36).substr(2, 9);
 
         console.log(`🌐 Creating WebRTC connection... [${connectionId}] -> [${dataChannelId}]`);
+        // Get the model from sessionStorage (stored when session run was created)
+        const storedModel = sessionRunId ? sessionStorage.getItem(`session_run_model_${sessionRunId}`) : null;
+        const modelToUse = storedModel || "gpt-realtime";
+        console.log(`🎯 Using model for session ${sessionRunId}: ${modelToUse}`);
+        
         const { pc, dc, mediaStream } = await createRealtimeConnection(
           EPHEMERAL_KEY,
           audioElementRef,
-          "opus"
+          "opus",
+          modelToUse
         );
         
         console.log(`🔗 Created new peer connection and data channel [${connectionId}] -> [${dataChannelId}] - Lock: ${connectionLockRef.current}`);

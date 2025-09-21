@@ -37,7 +37,8 @@ export function checkWebRTCSupport(): { supported: boolean; error?: string } {
 export async function createRealtimeConnection(
   EPHEMERAL_KEY: string,
   audioElement: RefObject<HTMLAudioElement | null>,
-  codec: string
+  codec: string,
+  model: string = "gpt-realtime"
 ): Promise<{ pc: RTCPeerConnection; dc: RTCDataChannel; mediaStream: MediaStream }> {
   // Check WebRTC support first
   const supportCheck = checkWebRTCSupport();
@@ -81,8 +82,8 @@ export async function createRealtimeConnection(
   await pc.setLocalDescription(offer);
 
   const baseUrl = "https://api.openai.com/v1/realtime";
-  // const model = "gpt-4o-mini-realtime-preview-2024-12-17";
-  const model = "gpt-4o-realtime-preview-2024-12-17";
+  // Use the model parameter passed to the function
+  console.log(`🤖 Using model: ${model}`);
 
   const sdpResponse = await fetch(`${baseUrl}?model=${model}`, {
     method: "POST",
