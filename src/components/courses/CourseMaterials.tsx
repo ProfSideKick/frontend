@@ -545,7 +545,7 @@ export default function CourseMaterials({ courseId }: CourseMaterialsProps) {
                   
                   {material.file_path && (
                     <a
-                      href={config.getApiUrl(material.file_path)}
+                      href={material.file_path.startsWith('http') ? material.file_path : config.getApiUrl(material.file_path)}
                       target="_blank"
                       rel="noopener noreferrer"
                       className="p-2 text-gray-500 hover:text-green-600 rounded-lg hover:bg-green-50"

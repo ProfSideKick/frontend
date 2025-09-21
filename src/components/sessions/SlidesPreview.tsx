@@ -188,8 +188,19 @@ export default function SlidesPreview({ slides, sessionId }: SlidesPreviewProps)
 
   const getImageUrl = (slide: SlideData) => {
     const backendUrl = process.env.NEXT_PUBLIC_BACKEND_URL || 'http://localhost:8000';
-    return slide.thumbnailPath ? `${backendUrl}${slide.thumbnailPath}` : 
-           slide.imagePath ? `${backendUrl}${slide.imagePath}` : null;
+    
+    // Get the image path (prefer thumbnail, fallback to full image)
+    const imagePath = slide.thumbnailPath || slide.imagePath;
+    
+    if (!imagePath) return null;
+    
+    // If it's already a full URL (S3 or other cloud storage), use it as is
+    if (imagePath.startsWith('http://') || imagePath.startsWith('https://')) {
+      return imagePath;
+    }
+    
+    // For relative paths, prepend backend URL
+    return `${backendUrl}${imagePath.startsWith('/') ? imagePath : `/${imagePath}`}`;
   };
 
   const generateSlidePreview = (slide: SlideData) => {
@@ -447,7 +458,7 @@ export default function SlidesPreview({ slides, sessionId }: SlidesPreviewProps)
               {getImageUrl(selectedSlide) ? (
                 <div className="mb-6">
                   <img 
-                    src={`${process.env.NEXT_PUBLIC_BACKEND_URL || 'http://localhost:8000'}${selectedSlide.imagePath}`}
+                    src={getImageUrl(selectedSlide) || ''}
                     alt={`Slide ${selectedSlide.slideNumber}`}
                     className="w-full max-h-96 object-contain rounded-lg border"
                   />

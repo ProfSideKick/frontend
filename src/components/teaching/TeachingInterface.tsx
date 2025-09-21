@@ -1216,6 +1216,11 @@ export default function TeachingInterface({ classSession, onEndSession, sessionR
   const getCorrectImageUrl = (imageUrl: string | undefined) => {
     if (!imageUrl) return '';
     
+    // If it's already a full URL (S3 or other cloud storage), use it as is
+    if (imageUrl.startsWith('http://') || imageUrl.startsWith('https://')) {
+      return imageUrl;
+    }
+    
     // If it's already a full URL with localhost:8000, use it as is
     if (imageUrl.startsWith(config.getApiUrl('/'))) {
       return imageUrl;
