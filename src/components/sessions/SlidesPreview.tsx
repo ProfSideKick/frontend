@@ -1,7 +1,7 @@
 'use client';
 
-import React, { useState, useEffect } from 'react';
-import { ChevronLeft, ChevronRight, Maximize2, Image as ImageIcon, RefreshCw, Edit3 } from 'lucide-react';
+import React, { useState, useEffect, useRef } from 'react';
+import { ChevronLeft, ChevronRight, Maximize2, Image as ImageIcon, RefreshCw, Edit3, Plus, Trash2, Upload, GripVertical } from 'lucide-react';
 import { useAuth } from '@/contexts/AuthContext';
 import { config } from '@/lib/config';
 
@@ -34,6 +34,13 @@ export default function SlidesPreview({ slides, sessionId }: SlidesPreviewProps)
   const [editingTitle, setEditingTitle] = useState('');
   const [isEditingContent, setIsEditingContent] = useState(false);
   const [isSavingContent, setIsSavingContent] = useState(false);
+  const [isAddingSlide, setIsAddingSlide] = useState(false);
+  const [isDeletingSlide, setIsDeletingSlide] = useState(false);
+  const [isReplacingImage, setIsReplacingImage] = useState(false);
+  const [draggedSlideId, setDraggedSlideId] = useState<number | null>(null);
+  const [, setIsReordering] = useState(false);
+  const fileInputRef = useRef<HTMLInputElement>(null);
+  const replaceImageInputRef = useRef<HTMLInputElement>(null);
 
   // Update slides when props change
   useEffect(() => {
@@ -182,6 +189,223 @@ export default function SlidesPreview({ slides, sessionId }: SlidesPreviewProps)
     }
   };
 
+  const handleAddSlide = async (file: File) => {
+    if (!token) {
+      console.error('No authentication token available');
+      return;
+    }
+
+    setIsAddingSlide(true);
+    try {
+      const formData = new FormData();
+      formData.append('slide_image', file);
+      formData.append('vision_instructions', 'You are a helpful assistant that can analyze the slide image and provide a detailed description of the content.');
+      formData.append('vision_model', 'gpt-4o');
+
+      const response = await fetch(
+        config.getApiUrl(`/api/sessions/${sessionId}/slides/add`),
+        {
+          method: 'POST',
+          headers: {
+            'Authorization': `Bearer ${token}`,
+          },
+          body: formData,
+        }
+      );
+
+      if (!response.ok) {
+        throw new Error(`Failed to add slide: ${response.statusText}`);
+      }
+
+      const updatedSessionData = await response.json();
+      setAllSlides(updatedSessionData.slidesDetails);
+      
+      console.log('✅ Slide added successfully');
+    } catch (error) {
+      console.error('❌ Error adding slide:', error);
+    } finally {
+      setIsAddingSlide(false);
+      if (fileInputRef.current) {
+        fileInputRef.current.value = '';
+      }
+    }
+  };
+
+  const handleDeleteSlide = async (slideId: number) => {
+    if (!token) {
+      console.error('No authentication token available');
+      return;
+    }
+
+    if (!confirm('Are you sure you want to delete this slide? This action cannot be undone.')) {
+      return;
+    }
+
+    setIsDeletingSlide(true);
+    try {
+      const response = await fetch(
+        config.getApiUrl(`/api/sessions/${sessionId}/slides/${slideId}`),
+        {
+          method: 'DELETE',
+          headers: {
+            'Authorization': `Bearer ${token}`,
+          },
+        }
+      );
+
+      if (!response.ok) {
+        throw new Error(`Failed to delete slide: ${response.statusText}`);
+      }
+
+      const updatedSessionData = await response.json();
+      setAllSlides(updatedSessionData.slidesDetails);
+      
+      // Close modal if we deleted the selected slide
+      if (selectedSlide?.id === slideId) {
+        closeModal();
+      }
+      
+      console.log('✅ Slide deleted successfully');
+    } catch (error) {
+      console.error('❌ Error deleting slide:', error);
+    } finally {
+      setIsDeletingSlide(false);
+    }
+  };
+
+  const handleReplaceImage = async (slideId: number, file: File) => {
+    if (!token) {
+      console.error('No authentication token available');
+      return;
+    }
+
+    setIsReplacingImage(true);
+    try {
+      const formData = new FormData();
+      formData.append('slide_image', file);
+      
+      // Use existing vision instructions if available
+      const slide = allSlides.find(s => s.id === slideId);
+      if (slide?.visionInstructions) {
+        formData.append('vision_instructions', slide.visionInstructions);
+      }
+      formData.append('vision_model', slide?.visionModel || 'gpt-4o');
+
+      const response = await fetch(
+        config.getApiUrl(`/api/sessions/${sessionId}/slides/${slideId}/replace-image`),
+        {
+          method: 'PUT',
+          headers: {
+            'Authorization': `Bearer ${token}`,
+          },
+          body: formData,
+        }
+      );
+
+      if (!response.ok) {
+        throw new Error(`Failed to replace image: ${response.statusText}`);
+      }
+
+      const updatedSessionData = await response.json();
+      setAllSlides(updatedSessionData.slidesDetails);
+      
+      // Update selected slide if it's the one we replaced
+      if (selectedSlide?.id === slideId) {
+        const updatedSlide = updatedSessionData.slidesDetails.find((s: SlideData) => s.id === slideId);
+        if (updatedSlide) {
+          setSelectedSlide(updatedSlide);
+          setEditingVisionInstructions(updatedSlide.visionInstructions || '');
+          setEditingContent(updatedSlide.content || '');
+          setEditingTitle(updatedSlide.title || '');
+        }
+      }
+      
+      console.log('✅ Image replaced successfully');
+    } catch (error) {
+      console.error('❌ Error replacing image:', error);
+    } finally {
+      setIsReplacingImage(false);
+      if (replaceImageInputRef.current) {
+        replaceImageInputRef.current.value = '';
+      }
+    }
+  };
+
+  const handleReorderSlides = async (newOrder: number[]) => {
+    if (!token) {
+      console.error('No authentication token available');
+      return;
+    }
+
+    setIsReordering(true);
+    try {
+      const response = await fetch(
+        config.getApiUrl(`/api/sessions/${sessionId}/slides/reorder`),
+        {
+          method: 'PUT',
+          headers: {
+            'Content-Type': 'application/json',
+            'Authorization': `Bearer ${token}`,
+          },
+          body: JSON.stringify({
+            slideOrder: newOrder,
+          }),
+        }
+      );
+
+      if (!response.ok) {
+        throw new Error(`Failed to reorder slides: ${response.statusText}`);
+      }
+
+      const updatedSessionData = await response.json();
+      setAllSlides(updatedSessionData.slidesDetails);
+      
+      console.log('✅ Slides reordered successfully');
+    } catch (error) {
+      console.error('❌ Error reordering slides:', error);
+      // Revert to original order on error
+      setAllSlides([...allSlides]);
+    } finally {
+      setIsReordering(false);
+    }
+  };
+
+  const handleDragStart = (e: React.DragEvent, slideId: number) => {
+    setDraggedSlideId(slideId);
+    e.dataTransfer.effectAllowed = 'move';
+  };
+
+  const handleDragOver = (e: React.DragEvent) => {
+    e.preventDefault();
+    e.dataTransfer.dropEffect = 'move';
+  };
+
+  const handleDrop = (e: React.DragEvent, targetSlideId: number) => {
+    e.preventDefault();
+    
+    if (draggedSlideId === null || draggedSlideId === targetSlideId) {
+      setDraggedSlideId(null);
+      return;
+    }
+
+    // Create new order
+    const draggedIndex = allSlides.findIndex(s => s.id === draggedSlideId);
+    const targetIndex = allSlides.findIndex(s => s.id === targetSlideId);
+    
+    const newSlides = [...allSlides];
+    const [draggedSlide] = newSlides.splice(draggedIndex, 1);
+    newSlides.splice(targetIndex, 0, draggedSlide);
+    
+    // Update local state optimistically
+    setAllSlides(newSlides);
+    
+    // Send new order to backend
+    const newOrder = newSlides.map(s => s.id);
+    handleReorderSlides(newOrder);
+    
+    setDraggedSlideId(null);
+  };
+
   const goToPage = (page: number) => {
     setCurrentPage(Math.max(1, Math.min(page, totalPages)));
   };
@@ -264,16 +488,41 @@ export default function SlidesPreview({ slides, sessionId }: SlidesPreviewProps)
           Slides Preview ({allSlides.length} slides)
         </h3>
         <div className="flex items-center space-x-3">
+          <input
+            ref={fileInputRef}
+            type="file"
+            accept="image/*"
+            onChange={(e) => {
+              const file = e.target.files?.[0];
+              if (file) {
+                handleAddSlide(file);
+              }
+            }}
+            className="hidden"
+          />
+          <button
+            onClick={() => fileInputRef.current?.click()}
+            disabled={isAddingSlide}
+            className="px-3 py-2 text-sm bg-green-600 hover:bg-green-700 text-white rounded-lg transition-colors flex items-center gap-2 disabled:opacity-50 disabled:cursor-not-allowed"
+          >
+            {isAddingSlide ? (
+              <>
+                <RefreshCw className="w-4 h-4 animate-spin" />
+                Adding...
+              </>
+            ) : (
+              <>
+                <Plus className="w-4 h-4" />
+                Add Slide
+              </>
+            )}
+          </button>
           <button
             onClick={() => setViewMode(viewMode === 'grid' ? 'list' : 'grid')}
             className="px-3 py-2 text-sm bg-gray-100 hover:bg-gray-200 rounded-lg transition-colors"
           >
             {viewMode === 'grid' ? 'List View' : 'Grid View'}
           </button>
-          {/* <button className="px-3 py-2 text-sm bg-blue-100 hover:bg-blue-200 text-blue-700 rounded-lg transition-colors">
-            <Download className="w-4 h-4 inline mr-1" />
-            Export
-          </button> */}
         </div>
       </div>
 
@@ -284,8 +533,16 @@ export default function SlidesPreview({ slides, sessionId }: SlidesPreviewProps)
             {currentSlides.map((slide) => (
               <div
                 key={slide.id}
+                draggable
+                onDragStart={(e) => handleDragStart(e, slide.id)}
+                onDragOver={handleDragOver}
+                onDrop={(e) => handleDrop(e, slide.id)}
                 onClick={() => handleSlideClick(slide)}
-                className="relative bg-gray-50 rounded-lg border border-gray-200 hover:border-blue-300 hover:shadow-md transition-all duration-200 cursor-pointer group aspect-[4/3]"
+                className={`relative bg-gray-50 rounded-lg border ${
+                  draggedSlideId === slide.id
+                    ? 'border-blue-500 opacity-50'
+                    : 'border-gray-200 hover:border-blue-300'
+                } hover:shadow-md transition-all duration-200 cursor-move group aspect-[4/3]`}
               >
                 <div className="absolute inset-0 rounded-lg overflow-hidden">
                   {generateSlidePreview(slide)}
@@ -308,11 +565,12 @@ export default function SlidesPreview({ slides, sessionId }: SlidesPreviewProps)
                   </div>
                 </div>
                 
-                <div className="absolute top-2 left-2 bg-black bg-opacity-60 text-white text-xs px-2 py-1 rounded">
+                <div className="absolute top-2 left-2 bg-black bg-opacity-60 text-white text-xs px-2 py-1 rounded flex items-center gap-1">
+                  <GripVertical className="w-3 h-3" />
                   {slide.slideNumber}
                 </div>
                 
-                <div className="absolute top-2 right-2 opacity-0 group-hover:opacity-100 transition-opacity duration-200">
+                <div className="absolute top-2 right-2 opacity-0 group-hover:opacity-100 transition-opacity duration-200 flex gap-1">
                   <button
                     onClick={(e) => {
                       e.stopPropagation();
@@ -320,13 +578,24 @@ export default function SlidesPreview({ slides, sessionId }: SlidesPreviewProps)
                       setEditingVisionInstructions(slide.visionInstructions || '');
                     }}
                     className="p-1 bg-blue-600 text-white rounded hover:bg-blue-700 transition-colors"
-                    title="Edit & Regenerate"
+                    title="View & Edit"
                   >
                     <RefreshCw className="w-3 h-3" />
                   </button>
+                  <button
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      handleDeleteSlide(slide.id);
+                    }}
+                    disabled={isDeletingSlide}
+                    className="p-1 bg-red-600 text-white rounded hover:bg-red-700 transition-colors disabled:opacity-50"
+                    title="Delete Slide"
+                  >
+                    <Trash2 className="w-3 h-3" />
+                  </button>
                 </div>
                 
-                <div className="absolute inset-0 bg-black bg-opacity-0 group-hover:bg-opacity-10 transition-all duration-200 rounded-lg flex items-center justify-center">
+                <div className="absolute inset-0 bg-black bg-opacity-0 group-hover:bg-opacity-10 transition-all duration-200 rounded-lg flex items-center justify-center pointer-events-none">
                   <Maximize2 className="w-6 h-6 text-white opacity-0 group-hover:opacity-100 transition-opacity duration-200" />
                 </div>
               </div>
@@ -342,9 +611,18 @@ export default function SlidesPreview({ slides, sessionId }: SlidesPreviewProps)
               return (
                 <div
                   key={slide.id}
+                  draggable
+                  onDragStart={(e) => handleDragStart(e, slide.id)}
+                  onDragOver={handleDragOver}
+                  onDrop={(e) => handleDrop(e, slide.id)}
                   onClick={() => handleSlideClick(slide)}
-                  className="flex items-center space-x-4 p-4 bg-gray-50 hover:bg-gray-100 rounded-lg cursor-pointer transition-colors"
+                  className={`flex items-center space-x-4 p-4 rounded-lg cursor-move transition-colors ${
+                    draggedSlideId === slide.id
+                      ? 'bg-blue-100 opacity-50'
+                      : 'bg-gray-50 hover:bg-gray-100'
+                  }`}
                 >
+                  <GripVertical className="w-5 h-5 text-gray-400 flex-shrink-0" />
                   <div className="w-16 h-12 bg-white rounded border border-gray-200 flex-shrink-0 overflow-hidden">
                     {imageUrl ? (
                       <img 
@@ -373,11 +651,21 @@ export default function SlidesPreview({ slides, sessionId }: SlidesPreviewProps)
                         handleSlideClick(slide);
                       }}
                       className="p-2 text-blue-600 hover:bg-blue-50 rounded-lg transition-colors"
-                      title="Edit & Regenerate"
+                      title="View & Edit"
                     >
-                      <RefreshCw className="w-4 h-4" />
+                      <Edit3 className="w-4 h-4" />
                     </button>
-                    <Maximize2 className="w-5 h-5 text-gray-400" />
+                    <button
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        handleDeleteSlide(slide.id);
+                      }}
+                      disabled={isDeletingSlide}
+                      className="p-2 text-red-600 hover:bg-red-50 rounded-lg transition-colors disabled:opacity-50"
+                      title="Delete Slide"
+                    >
+                      <Trash2 className="w-4 h-4" />
+                    </button>
                   </div>
                 </div>
               );
@@ -444,24 +732,63 @@ export default function SlidesPreview({ slides, sessionId }: SlidesPreviewProps)
               <h3 className="text-lg font-semibold">
                 Slide {selectedSlide.slideNumber}: {selectedSlide.title || 'Untitled'}
               </h3>
-              <button
-                onClick={closeModal}
-                className="p-2 hover:bg-gray-100 rounded-lg transition-colors"
-              >
-                <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
-                </svg>
-              </button>
+              <div className="flex items-center gap-2">
+                <button
+                  onClick={() => handleDeleteSlide(selectedSlide.id)}
+                  disabled={isDeletingSlide}
+                  className="p-2 text-red-600 hover:bg-red-50 rounded-lg transition-colors disabled:opacity-50"
+                  title="Delete Slide"
+                >
+                  <Trash2 className="w-5 h-5" />
+                </button>
+                <button
+                  onClick={closeModal}
+                  className="p-2 hover:bg-gray-100 rounded-lg transition-colors"
+                >
+                  <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+                  </svg>
+                </button>
+              </div>
             </div>
             
             <div className="p-6 max-h-[calc(90vh-8rem)] overflow-y-auto">
               {getImageUrl(selectedSlide) ? (
-                <div className="mb-6">
+                <div className="mb-6 relative group">
                   <img 
                     src={getImageUrl(selectedSlide) || ''}
                     alt={`Slide ${selectedSlide.slideNumber}`}
                     className="w-full max-h-96 object-contain rounded-lg border"
                   />
+                  <input
+                    ref={replaceImageInputRef}
+                    type="file"
+                    accept="image/*"
+                    onChange={(e) => {
+                      const file = e.target.files?.[0];
+                      if (file && selectedSlide) {
+                        handleReplaceImage(selectedSlide.id, file);
+                      }
+                    }}
+                    className="hidden"
+                  />
+                  <button
+                    onClick={() => replaceImageInputRef.current?.click()}
+                    disabled={isReplacingImage}
+                    className="absolute top-2 right-2 px-3 py-2 bg-white bg-opacity-90 hover:bg-opacity-100 rounded-lg shadow-md transition-all flex items-center gap-2 disabled:opacity-50 disabled:cursor-not-allowed"
+                  >
+                    {isReplacingImage ? (
+                      <>
+                        <RefreshCw className="w-4 h-4 animate-spin" />
+                        Replacing...
+                      </>
+                    ) : (
+                      <>
+                        <Upload className="w-4 h-4" />
+                        Replace Image
+                      </>
+                    )}
+                  </button>
                 </div>
               ) : (
                 <div className="mb-6 h-64 bg-gray-50 rounded-lg border-2 border-dashed border-gray-300 flex items-center justify-center">
