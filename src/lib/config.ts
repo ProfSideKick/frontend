@@ -16,7 +16,7 @@ export const config = {
     auth: {
       register: '/api/auth/register',
       login: '/api/auth/login',
-      verify: '/api/auth/verify',
+      verify: '/api/auth/verify-token',
       refresh: '/api/auth/refresh',
       logout: '/api/auth/logout',
     },
