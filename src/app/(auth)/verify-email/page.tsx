@@ -85,7 +85,7 @@ export default function VerifyEmailPage() {
                       What happens next?
                     </p>
                     <p className="text-sm text-blue-700">
-                      Your account is pending approval. You'll receive an email once your account is approved and ready to use.
+                      Your account is pending approval. You will receive an email once your account is approved and ready to use.
                     </p>
                   </div>
                 </div>
