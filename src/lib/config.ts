@@ -10,7 +10,7 @@ export const config = {
   // Environment flags
   isDevelopment: process.env.NODE_ENV === 'development',
   isProduction: process.env.NODE_ENV === 'production',
-  
+   
   // API endpoints
   api: {
     auth: {
