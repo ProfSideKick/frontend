@@ -41,6 +41,7 @@ export default function TeachingInterface({ classSession, onEndSession, sessionR
   });
   const [showCaptions, setShowCaptions] = useState(true);
   const captionScrollRef = useRef<HTMLDivElement>(null);
+  const [showStartPrompt, setShowStartPrompt] = useState(true); // Show from the beginning
   
   const pcRef = useRef<RTCPeerConnection | null>(null);
   const dcRef = useRef<RTCDataChannel | null>(null);
@@ -1047,6 +1048,24 @@ export default function TeachingInterface({ classSession, onEndSession, sessionR
     console.log(`📍 Slide ref updated to: ${currentSlide + 1}/${classSession.slides.length} (ref=${currentSlideRef.current})`);
   }, [currentSlide]);
 
+  // Auto-hide prompt after connection is established and 8 seconds pass
+  useEffect(() => {
+    if (sessionStatus === "CONNECTED") {
+      const timer = setTimeout(() => {
+        setShowStartPrompt(false);
+      }, 8000);
+      
+      return () => clearTimeout(timer);
+    }
+  }, [sessionStatus]);
+
+  // Hide prompt when user starts speaking
+  useEffect(() => {
+    if (isUserSpeaking && showStartPrompt) {
+      setShowStartPrompt(false);
+    }
+  }, [isUserSpeaking, showStartPrompt]);
+
   // Function to set up the message handler with current closure
   const setMessageHandler = () => {
     console.log('🔧 Setting up message handler...');
@@ -1247,7 +1266,48 @@ export default function TeachingInterface({ classSession, onEndSession, sessionR
   };
 
   return (
-    <div className="h-screen bg-gray-100 flex">
+    <div className="h-screen bg-gray-100 flex relative">
+      {/* Start Conversation Prompt - Floating notification */}
+      {showStartPrompt && (
+        <div className="absolute top-6 left-1/2 -translate-x-1/2 z-50 animate-fade-in">
+          <div className={`${
+            sessionStatus === "CONNECTED"
+              ? "bg-gradient-to-r from-emerald-500 to-teal-500 shadow-emerald-500/30"
+              : "bg-gradient-to-r from-amber-500 to-orange-500 shadow-amber-500/30"
+          } text-white px-6 py-4 rounded-2xl shadow-2xl flex items-center gap-3 border border-white/20 transition-all duration-300`}>
+            <div className="w-10 h-10 bg-white/20 rounded-full flex items-center justify-center animate-pulse">
+              {sessionStatus === "CONNECTED" ? (
+                <Mic size={20} className="text-white" />
+              ) : (
+                <div className="w-5 h-5 border-3 border-white border-t-transparent rounded-full animate-spin"></div>
+              )}
+            </div>
+            <div>
+              {sessionStatus === "CONNECTED" ? (
+                <>
+                  <p className="font-semibold text-base">👋 Ready to start!</p>
+                  <p className="text-sm text-emerald-50">Say something to begin the conversation</p>
+                </>
+              ) : (
+                <>
+                  <p className="font-semibold text-base">🔄 Connecting...</p>
+                  <p className="text-sm text-amber-50">Please wait while we establish the connection</p>
+                </>
+              )}
+            </div>
+            {sessionStatus === "CONNECTED" && (
+              <button
+                onClick={() => setShowStartPrompt(false)}
+                className="ml-2 text-white/80 hover:text-white transition-colors"
+                aria-label="Close"
+              >
+                ✕
+              </button>
+            )}
+          </div>
+        </div>
+      )}
+
       {/* Left Side - Slide Viewer (70%) */}
       <div className="w-[80%] bg-white flex flex-col">
         {/* Header */}
