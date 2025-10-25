@@ -52,6 +52,9 @@ export default function TeachingInterface({ classSession, onEndSession, sessionR
   const messageHandlerRef = useRef<((e: MessageEvent) => void) | null>(null);
   const isIntentionallyDisconnectedRef = useRef(false);
   const connectionLockRef = useRef(false); // Prevent simultaneous connections
+  const GUARD_PHRASES = ["stop", "pause", "end session", "wait"]; // Guard phrases to allow intentional interruptions
+  const MIN_VOICE_LENGTH = 0.8; // Minimum length in seconds
+  const MIN_CONFIDENCE = 0.85;  // Minimum confidence from speech recognition
 
   const { transcriptItems } = useTranscript();
   const { logClientEvent,  } = useEvent();
@@ -133,6 +136,52 @@ export default function TeachingInterface({ classSession, onEndSession, sessionR
       throw error;
     }
   }, [classSession.sessionId, sessionRunId]);
+
+  const handleUserSpeech = useCallback(
+    (recognizedText: string, confidence: number, duration: number) => {
+      // Ignore very short phrases
+      if (duration < MIN_VOICE_LENGTH) {
+        console.log("Ignoring short sound:", recognizedText);
+        return;
+      }
+
+      // Ignore low confidence phrases
+      if (confidence < MIN_CONFIDENCE) {
+        console.log("Ignoring low-confidence phrase:", recognizedText);
+        return;
+      }
+
+      // --- Ignore filler or non-meaningful speech ---
+      const fillerWords = [
+        "uh", "um", "hmm", "ah", "er", "like", "okay", "alright", "yeah", "right"
+      ];
+      if (fillerWords.some(w => normalizedText === w || normalizedText.endsWith(` ${w}`))) {
+        console.log("Ignoring filler phrase:", recognizedText);
+        return;
+      }
+
+      // Check if this is an intentional interrupt
+      const normalizedText = recognizedText.toLowerCase().trim();
+      const isGuard = GUARD_PHRASES.some((phrase) =>
+        normalizedText.includes(phrase)
+      );
+      if (!normalizedText || normalizedText.length < 2) {
+        console.log("Ignoring empty/short text chunk");
+        return;
+      }
+
+      if (isGuard) {
+        console.log("Intentional interruption detected:", recognizedText);
+        // Handle stopping or pausing session
+        disconnectFromRealtime(); // Or stopSession() if you define one
+      } else {
+        console.log("Ignoring non-guard phrase:", recognizedText);
+        // Continue session normally
+      }
+    },
+    []
+  );
+
 
   const connectToRealtime = async () => {
     // Generate unique connection ID for this attempt
@@ -1069,11 +1118,12 @@ export default function TeachingInterface({ classSession, onEndSession, sessionR
   // Function to set up the message handler with current closure
   const setMessageHandler = () => {
     console.log('🔧 Setting up message handler...');
+    
     messageHandlerRef.current = (e: MessageEvent) => {
       const serverEvent = JSON.parse(e.data);
       console.log("🔄 Processing server event:", serverEvent.type, serverEvent);
-      
-      // Track voice activity
+
+      // --- Track voice activity ---
       if (serverEvent.type === "input_audio_buffer.speech_started") {
         setIsUserSpeaking(true);
       } else if (serverEvent.type === "input_audio_buffer.speech_stopped") {
@@ -1084,47 +1134,46 @@ export default function TeachingInterface({ classSession, onEndSession, sessionR
       } else if (serverEvent.type === "output_audio_buffer.stopped") {
         setIsAISpeaking(false);
       }
-      
-      // Handle tool calls for slide navigation
+
+      // --- Guard phrases: intercept intentional interruptions ---
+      if (serverEvent.type === "transcript.final") {
+        const recognizedText = serverEvent.text;
+        const confidence = serverEvent.confidence || 1;
+        const duration = serverEvent.duration || recognizedText.split(" ").length * 0.3;
+
+        // Debounce final transcript processing to avoid tiny interruptions
+        clearTimeout((window as any)._speechHandleTimer);
+        (window as any)._speechHandleTimer = setTimeout(() => {
+          handleUserSpeech(recognizedText, confidence, duration);
+        }, 400); // small delay for stabilization
+      }
+
+
+      // --- Handle tool calls for slide navigation ---
       if (serverEvent.type === "response.done" && serverEvent.response?.output) {
-        console.log("🎯 Response done event with output:", serverEvent.response.output);
         serverEvent.response.output.forEach((outputItem: any) => {
-          console.log("🔍 Processing output item:", outputItem);
           if (outputItem.type === "function_call" && outputItem.name) {
             const args = outputItem.arguments ? JSON.parse(outputItem.arguments) : {};
             
-            console.log(`🤖 AI Function Call: ${outputItem.name}`, args);
-            
             let functionResult = { success: false, message: "", data: {} };
             
-            // Handle slide navigation functions
+            // nextSlide
             if (outputItem.name === "nextSlide") {
               const currentSlideValue = currentSlideRef.current;
-              console.log(`🔍 AI nextSlide Debug: ref=${currentSlideValue}, total=${classSession.slides.length}`);
               if (currentSlideValue < classSession.slides.length - 1) {
                 const newSlide = currentSlideValue + 1;
-                console.log(`🎯 AI nextSlide: Moving from ${currentSlideValue} to ${newSlide}`);
                 setCurrentSlide(newSlide);
                 functionResult = {
                   success: true,
                   message: `Moved to slide ${newSlide + 1}`,
-                  data: {
-                    previousSlide: currentSlideValue + 1,
-                    currentSlide: newSlide + 1,
-                    slideTitle: classSession.slides[newSlide]?.title || "Unknown"
-                  }
+                  data: { previousSlide: currentSlideValue + 1, currentSlide: newSlide + 1 }
                 };
-                console.log(`✅ Next Slide: ${currentSlideValue + 1} → ${newSlide + 1}`);
               } else {
-                functionResult = {
-                  success: false,
-                  message: "Already at the last slide",
-                  data: { currentSlide: currentSlideValue + 1, totalSlides: classSession.slides.length }
-                };
-                console.log(`❌ Next Slide Failed: Already at last slide (${currentSlideValue + 1}/${classSession.slides.length})`);
+                functionResult = { success: false, message: "Already at last slide", data: {} };
               }
-            } 
-            
+            }
+
+            // previousSlide
             else if (outputItem.name === "previousSlide") {
               const currentSlideValue = currentSlideRef.current;
               if (currentSlideValue > 0) {
@@ -1133,75 +1182,38 @@ export default function TeachingInterface({ classSession, onEndSession, sessionR
                 functionResult = {
                   success: true,
                   message: `Moved to slide ${newSlide + 1}`,
-                  data: {
-                    previousSlide: currentSlideValue + 1,
-                    currentSlide: newSlide + 1,
-                    slideTitle: classSession.slides[newSlide]?.title || "Unknown"
-                  }
+                  data: { previousSlide: currentSlideValue + 1, currentSlide: newSlide + 1 }
                 };
-                console.log(`✅ Previous Slide: ${currentSlideValue + 1} → ${newSlide + 1}`);
               } else {
-                functionResult = {
-                  success: false,
-                  message: "Already at the first slide",
-                  data: { currentSlide: currentSlideValue + 1, totalSlides: classSession.slides.length }
-                };
-                console.log(`❌ Previous Slide Failed: Already at first slide`);
+                functionResult = { success: false, message: "Already at first slide", data: {} };
               }
-            } 
-            
+            }
+
+            // goToSlide
             else if (outputItem.name === "goToSlide" && args.slideNumber) {
               const currentSlideValue = currentSlideRef.current;
-              const targetSlide = parseInt(args.slideNumber) - 1; // Convert to 0-indexed
+              const targetSlide = parseInt(args.slideNumber) - 1;
               if (targetSlide >= 0 && targetSlide < classSession.slides.length) {
                 setCurrentSlide(targetSlide);
                 functionResult = {
                   success: true,
                   message: `Jumped to slide ${targetSlide + 1}`,
-                  data: {
-                    previousSlide: currentSlideValue + 1,
-                    currentSlide: targetSlide + 1,
-                    slideTitle: classSession.slides[targetSlide]?.title || "Unknown"
-                  }
+                  data: { previousSlide: currentSlideValue + 1, currentSlide: targetSlide + 1 }
                 };
-                console.log(`✅ Go To Slide: ${currentSlideValue + 1} → ${targetSlide + 1}`);
               } else {
-                functionResult = {
-                  success: false,
-                  message: `Invalid slide number: ${args.slideNumber}`,
-                  data: { 
-                    requestedSlide: args.slideNumber, 
-                    validRange: `1-${classSession.slides.length}`,
-                    currentSlide: currentSlideValue + 1 
-                  }
-                };
-                console.log(`❌ Go To Slide Failed: Invalid slide ${args.slideNumber} (valid: 1-${classSession.slides.length})`);
+                functionResult = { success: false, message: "Invalid slide number", data: {} };
               }
             }
-            
-            else {
-              functionResult = {
-                success: false,
-                message: `Unknown function: ${outputItem.name}`,
-                data: { functionName: outputItem.name, availableFunctions: ["nextSlide", "previousSlide", "goToSlide"] }
-              };
-              console.log(`❌ Unknown Function: ${outputItem.name}`);
-            }
-            
-            // Log the complete interaction
+
             console.log(`📤 Function Response:`, functionResult);
-            
-            // If sending failed, note it but don't break the functionality
-            if (dcRef.current?.readyState !== "open") {
-              console.log(`⚠️ Function executed locally but couldn't send response to AI (data channel not available)`);
-            }
           }
         });
       }
-      
+
       // Pass to the default handler for other events
       handleServerEventRef.current(serverEvent);
     };
+
     console.log('✅ Message handler set up successfully');
   };
 
@@ -1415,6 +1427,20 @@ export default function TeachingInterface({ classSession, onEndSession, sessionR
               </div>
             </div>
           </div>
+        </div>
+
+        {/* Guard Phrase Info */}
+        <div className="px-4 py-3 bg-emerald-50 border-b border-emerald-200">
+          <p className="text-xs text-emerald-900 font-semibold mb-1">
+            Voice Commands
+          </p>
+          <p className="text-xs text-emerald-800 leading-relaxed">
+            To pause/end the session, say:{" "}
+            <span className="font-semibold text-emerald-900">“stop”</span>,{" "}
+            <span className="font-semibold text-emerald-900">“pause”</span>,{" "}
+            <span className="font-semibold text-emerald-900">“wait”</span>, or{" "}
+            <span className="font-semibold text-emerald-900">“end session”</span>.
+          </p>
         </div>
 
         {/* Voice Status */}
