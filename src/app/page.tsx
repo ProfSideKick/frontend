@@ -314,6 +314,27 @@ export default function LandingPage() {
             <div className="text-center p-6 bg-gray-50 rounded-2xl hover:shadow-lg transition-shadow">
               <div className="w-24 h-24 mx-auto mb-6 relative">
                 <img 
+                  src="/images/team/hanan.jpg" 
+                  alt="Hanan Salam"
+                  className="w-24 h-24 rounded-full object-cover shadow-lg"
+                  onError={(e) => {
+                    const target = e.target as HTMLImageElement;
+                    target.style.display = 'none';
+                    const fallback = target.nextElementSibling as HTMLDivElement;
+                    if (fallback) fallback.style.display = 'flex';
+                  }}
+                />
+                <div className="w-24 h-24 bg-gradient-to-br from-green-500 to-green-600 rounded-full items-center justify-center absolute top-0 left-0 hidden">
+                  <span className="text-2xl font-bold text-white">DR</span>
+                </div>
+              </div>
+              <h3 className="text-xl font-semibold text-gray-900 mb-2">Hanan Salam</h3>
+              <p className="text-teal-600 font-medium mb-3">Assistant Professor of Computer Science at NYU Abu Dhabi</p>
+            </div>
+
+            <div className="text-center p-6 bg-gray-50 rounded-2xl hover:shadow-lg transition-shadow">
+              <div className="w-24 h-24 mx-auto mb-6 relative">
+                <img 
                   src="/images/team/assylbek.jpg" 
                   alt="Assylbek Saduakhassov"
                   className="w-24 h-24 rounded-full object-cover shadow-lg"
@@ -330,10 +351,6 @@ export default function LandingPage() {
               </div>
               <h3 className="text-xl font-semibold text-gray-900 mb-2">Assylbek Saduakhassov</h3>
               <p className="text-blue-600 font-medium mb-3">Software Engineer</p>
-              {/* <p className="text-gray-600 text-sm leading-relaxed">
-                Software Engineer with a passion for building innovative solutions to enhance education. 
-                Currently working on ProfSidekick to empower educators worldwide.
-              </p> */}
             </div>
           </div>
         </div>
