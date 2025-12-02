@@ -52,6 +52,7 @@ export default function TeachingInterface({ classSession, onEndSession, sessionR
   const messageHandlerRef = useRef<((e: MessageEvent) => void) | null>(null);
   const isIntentionallyDisconnectedRef = useRef(false);
   const connectionLockRef = useRef(false); // Prevent simultaneous connections
+  const disconnectFromRealtimeRef = useRef<(() => void) | null>(null);
   const GUARD_PHRASES = ["stop", "pause", "end session", "wait"]; // Guard phrases to allow intentional interruptions
   const MIN_VOICE_LENGTH = 0.8; // Minimum length in seconds
   const MIN_CONFIDENCE = 0.85;  // Minimum confidence from speech recognition
@@ -151,6 +152,15 @@ export default function TeachingInterface({ classSession, onEndSession, sessionR
         return;
       }
 
+      // Normalize text first
+      const normalizedText = recognizedText.toLowerCase().trim();
+      
+      // Check for empty/short text early
+      if (!normalizedText || normalizedText.length < 2) {
+        console.log("Ignoring empty/short text chunk");
+        return;
+      }
+
       // --- Ignore filler or non-meaningful speech ---
       const fillerWords = [
         "uh", "um", "hmm", "ah", "er", "like", "okay", "alright", "yeah", "right"
@@ -161,19 +171,16 @@ export default function TeachingInterface({ classSession, onEndSession, sessionR
       }
 
       // Check if this is an intentional interrupt
-      const normalizedText = recognizedText.toLowerCase().trim();
       const isGuard = GUARD_PHRASES.some((phrase) =>
         normalizedText.includes(phrase)
       );
-      if (!normalizedText || normalizedText.length < 2) {
-        console.log("Ignoring empty/short text chunk");
-        return;
-      }
 
       if (isGuard) {
         console.log("Intentional interruption detected:", recognizedText);
         // Handle stopping or pausing session
-        disconnectFromRealtime(); // Or stopSession() if you define one
+        if (disconnectFromRealtimeRef.current) {
+          disconnectFromRealtimeRef.current();
+        }
       } else {
         console.log("Ignoring non-guard phrase:", recognizedText);
         // Continue session normally
@@ -575,6 +582,11 @@ export default function TeachingInterface({ classSession, onEndSession, sessionR
     
     console.log('✅ Successfully disconnected from realtime - all audio capture and processing stopped');
   };
+
+  // Update ref so handleUserSpeech can access disconnectFromRealtime
+  useEffect(() => {
+    disconnectFromRealtimeRef.current = disconnectFromRealtime;
+  }, [disconnectFromRealtime]);
 
   // Separate function for React Strict Mode cleanup
   const disconnectFromRealtimeReactCleanup = () => {
