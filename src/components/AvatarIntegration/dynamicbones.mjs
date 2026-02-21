@@ -1,3 +1,5 @@
+/* eslint-disable */
+
 /**
 * MIT License
 *
@@ -913,8 +915,8 @@ class DynamicBones {
       const geom = new THREE.BufferGeometry();
       const vertices = tmp.bones.map( ).flat(); //removed x
       geom.setAttribute( 'position', new THREE.Float32BufferAttribute( vertices, 3 ) );
-      const c1 = new THREE.Color( this.opt.helperLinkColor1 );
-      const c2 = new THREE.Color( this.opt.helperLinkColor2 );
+      // const c1 = new THREE.Color( this.opt.helperLinkColor1 );
+      // const c2 = new THREE.Color( this.opt.helperLinkColor2 );
       const colors = tmp.bones.map( ).flat(); //removed  x => [c1.r,c1.g,c1.b,c2.r,c2.g,c2.b]
       geom.setAttribute( 'color', new THREE.Float32BufferAttribute( colors, 3 ) );
       const material = new THREE.LineBasicMaterial( {

@@ -1,3 +1,6 @@
+
+/* eslint-disable */
+
 /**
 * MIT License
 *
@@ -21,6 +24,8 @@
 * OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 * SOFTWARE.
 */
+
+
 
 'use client';
 
@@ -1410,7 +1415,7 @@ class TalkingHead {
         this.isStreaming = false;
       } catch(e) { 
         console.error('Error disconnecting streamWorkletNode:', e);
-        /* ignore */ 
+        
       }
       this.streamWorkletNode = null;
     }
@@ -5320,10 +5325,10 @@ _buildVisemeVs(visemeCode, peakValue) {
 
     try {
       if (this._mediaStreamSource) {
-        try { this._mediaStreamSource.disconnect(); } catch(e) {}
+        try { this._mediaStreamSource.disconnect(); } catch {}
         this._mediaStreamSource = null;
       }
-    } catch(e) {}
+    } catch {}
 
     if (this._lipsyncFallbackTickId) {
       cancelAnimationFrame(this._lipsyncFallbackTickId);
