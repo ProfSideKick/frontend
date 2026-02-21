@@ -10,9 +10,28 @@ import { createRealtimeConnection, checkWebRTCSupport } from "@/lib/realtimeConn
 import teachingAssistant from "@/constants/teachingAssistant";
 import { config } from "@/lib/config";
 
+//import AvatarDisplay from "./AvatarDisplay";
+import { TalkingHead } from "../AvatarIntegration/talkinghead.mjs";
+import { LipsyncEn } from "../AvatarIntegration/lipsync-en.mjs";
+
+
 // Global connection tracking to prevent React Strict Mode issues
 let globalConnectionId: string | null = null;
 let globalConnectionPromise: Promise<void> | null = null;
+
+
+// async function processTextForAvatar(head: any, text: string) {
+//   if (!text || !head) return;
+  
+//   const cleanText = text.trim();
+//   if (cleanText.length === 0) return;
+  
+//   // ONLY use the library's built-in method
+//   head.speakFromTranscript(cleanText, { 
+//     append: true, 
+//     wordsPerChunk: 8 
+//   });
+// }
 
 interface TeachingInterfaceProps {
   classSession: ClassSession;
@@ -47,18 +66,273 @@ export default function TeachingInterface({ classSession, onEndSession, sessionR
   const dcRef = useRef<RTCDataChannel | null>(null);
   const audioElementRef = useRef<HTMLAudioElement | null>(null);
   const mediaStreamRef = useRef<MediaStream | null>(null);
+  // Single-source-of-truth connection state machine
+  // States: 'IDLE' | 'CONNECTING' | 'CONNECTED' | 'DISCONNECTING' | 'DISCONNECTED'
+  // This is the ONLY state that controls whether fetchEphemeralKey() can be called
+  const connectionStateRef = useRef<'IDLE' | 'CONNECTING' | 'CONNECTED' | 'DISCONNECTING' | 'DISCONNECTED'>('IDLE');
+  
   const hasConnectedRef = useRef(false);
   const currentSlideRef = useRef(0); // Initialize to 0 to match initial state
   const messageHandlerRef = useRef<((e: MessageEvent) => void) | null>(null);
   const isIntentionallyDisconnectedRef = useRef(false);
   const connectionLockRef = useRef(false); // Prevent simultaneous connections
   const disconnectFromRealtimeRef = useRef<(() => void) | null>(null);
+  const autoReconnectTimeoutRef = useRef<NodeJS.Timeout | null>(null); // Track auto-reconnect timeout for cancellation
   const GUARD_PHRASES = ["stop", "pause", "end session", "wait"]; // Guard phrases to allow intentional interruptions
   const MIN_VOICE_LENGTH = 0.8; // Minimum length in seconds
   const MIN_CONFIDENCE = 0.85;  // Minimum confidence from speech recognition
 
   const { transcriptItems } = useTranscript();
   const { logClientEvent,  } = useEvent();
+
+  // Ref to access transcriptItems in message handler callbacks
+  const transcriptItemsRef = useRef(transcriptItems);
+  useEffect(() => {
+    transcriptItemsRef.current = transcriptItems;
+  }, [transcriptItems]);
+
+  const talkingHeadRef = useRef<any>(null);
+  const avatarContainerRef = useRef<HTMLDivElement>(null);
+  /** Buffer for transcript deltas; flushed to speakFromTranscript every THROTTLE_MS */
+  const pendingTranscriptBufferRef = useRef("");
+  const pendingFlushTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const SPEAK_FROM_TRANSCRIPT_THROTTLE_MS = 0; //60 before
+
+
+  useEffect(() => {
+    if (talkingHeadRef.current) return;
+    if (!avatarContainerRef.current) return;
+
+    avatarContainerRef.current.innerHTML = "";
+
+    const th = new TalkingHead(avatarContainerRef.current, {
+      lipsyncModule: LipsyncEn,
+      cameraView: "head",
+      cameraRotateEnable: false,
+      cameraZoomEnable: false,
+      cameraPanEnable: false,
+      modelPixelRatio: 1.5
+    });
+
+    talkingHeadRef.current = th;
+
+    requestAnimationFrame(async () => {
+      console.log("[AVATAR] Loading avatar model...");
+      
+      try {
+        await th.showAvatar({ url: "/avatars/brunette.glb" } as any);
+        console.log("[AVATAR] Avatar loaded successfully");
+
+        // Find and cache the mesh with morph targets
+        let cachedMesh: any = null;
+        th.armature.traverse((node: any) => {
+          if (node.morphTargetInfluences && node.morphTargetDictionary) {
+            cachedMesh = node;
+          }
+        });
+        
+        // Store cachedMesh in the instance (use bracket notation or type assertion)
+        (th as any).cachedMesh = cachedMesh;
+
+        // if (cachedMesh) {
+        //   const visemeCount = Object.keys(cachedMesh.morphTargetDictionary || {})
+        //     .filter((k: string) => k.startsWith('viseme'))
+        //     .length;
+        //   console.log(`[AVATAR] Found ${visemeCount} viseme blend shapes`);
+        // }
+        
+        // if (cachedMesh) {
+        //   const morphDict = cachedMesh.morphTargetDictionary || {};
+        //   const allMorphs = Object.keys(morphDict);
+        //   const visemes = allMorphs.filter(k => k.toLowerCase().includes('viseme'));
+          
+        //   console.log("═══════════════════════════════════════");
+        //   console.log("[AVATAR DEBUG] Total morph targets:", allMorphs.length);
+        //   console.log("[AVATAR DEBUG] All morph target names:", allMorphs);
+        //   console.log("═══════════════════════════════════════");
+        //   console.log("[AVATAR DEBUG] Viseme morph targets found:", visemes.length);
+        //   console.log("[AVATAR DEBUG] Viseme names:", visemes);
+        //   console.log("═══════════════════════════════════════");
+          
+        //   // Test each viseme by setting it to different values
+        //   console.log("[AVATAR DEBUG] Testing viseme values...");
+        //   console.log("Setting all visemes to 0.0 (neutral)");
+        //   visemes.forEach(v => {
+        //     const idx = morphDict[v];
+        //     cachedMesh.morphTargetInfluences[idx] = 0.0;
+        //   });
+          
+        //   // Test viseme_PP at different intensities
+        //   if (morphDict['viseme_PP'] !== undefined) {
+        //     console.log("\n[TEST] Testing viseme_PP:");
+        //     setTimeout(() => {
+        //       console.log("  Setting viseme_PP = 0.1");
+        //       cachedMesh.morphTargetInfluences[morphDict['viseme_PP']] = 0.1;
+        //     }, 2000);
+            
+        //     setTimeout(() => {
+        //       console.log("  Setting viseme_PP = 0.5");
+        //       cachedMesh.morphTargetInfluences[morphDict['viseme_PP']] = 0.5;
+        //     }, 4000);
+            
+        //     setTimeout(() => {
+        //       console.log("  Setting viseme_PP = 0.9");
+        //       cachedMesh.morphTargetInfluences[morphDict['viseme_PP']] = 0.9;
+        //     }, 6000);
+            
+        //     setTimeout(() => {
+        //       console.log("  Resetting to 0.0");
+        //       cachedMesh.morphTargetInfluences[morphDict['viseme_PP']] = 0.0;
+        //     }, 8000);
+        //   }
+          
+        //   // Test viseme_aa at different intensities
+        //   if (morphDict['viseme_aa'] !== undefined) {
+        //     console.log("\n[TEST] Testing viseme_aa:");
+        //     setTimeout(() => {
+        //       console.log("  Setting viseme_aa = 0.1");
+        //       cachedMesh.morphTargetInfluences[morphDict['viseme_aa']] = 0.1;
+        //     }, 10000);
+            
+        //     setTimeout(() => {
+        //       console.log("  Setting viseme_aa = 0.5");
+        //       cachedMesh.morphTargetInfluences[morphDict['viseme_aa']] = 0.5;
+        //     }, 12000);
+            
+        //     setTimeout(() => {
+        //       console.log("  Setting viseme_aa = 0.9");
+        //       cachedMesh.morphTargetInfluences[morphDict['viseme_aa']] = 0.9;
+        //     }, 14000);
+            
+        //     setTimeout(() => {
+        //       console.log("  Resetting to 0.0");
+        //       cachedMesh.morphTargetInfluences[morphDict['viseme_aa']] = 0.0;
+        //     }, 16000);
+        //   }
+        // }
+
+        // Configure camera
+        th.setView("head", {
+          cameraDistance: 1.8,
+          cameraY: 0.7,
+          cameraX: 0
+        });
+
+        // Ensure the library's animation loop runs: wrap animate() so our code runs in the same loop.
+        // TalkingHead does not call update(); it only runs animate(t) via requestAnimationFrame.
+        const originalAnimate = (th as any).animate?.bind(th);
+        if (typeof originalAnimate === "function") {
+          (th as any).animate = function (t: number) {
+            originalAnimate(t); // advances animClock, processes animQueue, applies morphs
+          };
+        }
+
+        // Start the animation loop (schedules requestAnimationFrame(animate); animClock advances each frame)
+        if ((th as any).start && typeof (th as any).start === "function") {
+          (th as any).start();
+          console.log("[AVATAR] Animation loop started");
+        } else {
+          console.warn("[AVATAR] No start() method found on TalkingHead");
+        }
+
+        // Test viseme after a delay (ts in ms to match animClock)
+        setTimeout(() => {
+          if ((th as any).animQueue) {
+            const nowMs = (th as any).animClock ?? 0;
+            (th as any).animQueue.push({
+              template: { name: "viseme" },
+              ts: [nowMs, nowMs + 150, nowMs + 300],
+              vs: { viseme_aa: [0, 0.1, 0] }, //changed!!
+            });
+            (th as any).isSpeaking = true;
+            setTimeout(() => {
+              (th as any).isSpeaking = false;
+            }, 500);
+          }
+        }, 2000);
+
+      } catch (error) {
+        console.error("[AVATAR] Failed to load avatar:", error);
+      }
+    });
+
+    return () => {
+      try {
+        if (talkingHeadRef.current) {
+          (talkingHeadRef.current as any).dispose();
+        }
+      } catch (e) {
+        console.warn("[AVATAR] Error during cleanup:", e);
+      }
+      talkingHeadRef.current = null;
+      //avatarProcessedWordsRef.current.clear();
+      //currentAssistantItemIdRef.current = null;
+    };
+  }, []);
+
+
+
+
+  
+  useEffect(() => {
+    // Only run monitoring when actually connected
+    if (sessionStatus !== "CONNECTED") {
+      return;
+    }
+
+    const debugInterval = setInterval(() => {
+      if (talkingHeadRef.current) {
+        const clockMs = talkingHeadRef.current.animClock ?? 0;
+        console.log(
+          `[QUEUE] Size: ${talkingHeadRef.current.animQueue.length}, ` +
+            `Clock: ${(clockMs / 1000).toFixed(2)}s, ` +
+            `Speaking: ${talkingHeadRef.current.isSpeaking}`
+        );
+      }
+    }, 1000);
+
+    console.log("[QUEUE] Monitoring started");
+
+    return () => {
+      console.log("[QUEUE] Monitoring stopped");
+      clearInterval(debugInterval);
+    };
+  }, [sessionStatus]); // ← IMPORTANT: Add this dependency!
+
+
+  // Debug: log avatar loop status when connected (clock in seconds; animClock is ms in TalkingHead)
+  useEffect(() => {
+    if (!talkingHeadRef.current || sessionStatus !== "CONNECTED") return;
+    const interval = setInterval(() => {
+      if (talkingHeadRef.current) {
+        const clockMs = talkingHeadRef.current.animClock ?? 0;
+        console.log(
+          `[AVATAR-DEBUG] Clock: ${(clockMs / 1000).toFixed(2)}s, Queue: ${talkingHeadRef.current.animQueue?.length ?? 0}, Running: ${(talkingHeadRef.current as any).isRunning}`
+        );
+      }
+    }, 2000);
+
+    
+
+    return () => clearInterval(interval);
+  }, [sessionStatus === "CONNECTED"]);
+
+
+  useEffect(() => {
+    if (!isAISpeaking) {
+      pendingTranscriptBufferRef.current = "";
+      if (pendingFlushTimeoutRef.current) {
+        clearTimeout(pendingFlushTimeoutRef.current);
+        pendingFlushTimeoutRef.current = null;
+      }
+    }
+  }, [isAISpeaking]);
+
+
+
+
+
+
 
   const sendClientEvent = (eventObj: any, eventNameSuffix = "") => {
     if (dcRef.current && dcRef.current.readyState === "open") {
@@ -78,33 +352,143 @@ export default function TeachingInterface({ classSession, onEndSession, sessionR
       );
       
       // Try to reconnect if the connection is lost (but not if intentionally disconnected)
-      if (sessionStatus === "CONNECTED" && (!dcRef.current || dcRef.current.readyState === "closed") && !isIntentionallyDisconnectedRef.current) {
+      // CRITICAL: Check connectionStateRef (single source of truth) instead of multiple flags
+      if (connectionStateRef.current === "CONNECTED" && (!dcRef.current || dcRef.current.readyState === "closed") && !isIntentionallyDisconnectedRef.current) {
         console.log("🔄 Data channel lost, attempting reconnection...");
         setSessionStatus("DISCONNECTED");
         hasConnectedRef.current = false;
         setIsConnecting(false);
+        connectionStateRef.current = "DISCONNECTED"; // Update state machine
         
-        // Attempt reconnection after a short delay - BUT ONLY IF NOT ALREADY CONNECTING
-        setTimeout(() => {
-          // Check if we're not already trying to connect using the ref and still not intentionally disconnected
+        // Cancel any existing auto-reconnect timeout
+        if (autoReconnectTimeoutRef.current) {
+          clearTimeout(autoReconnectTimeoutRef.current);
+          autoReconnectTimeoutRef.current = null;
+        }
+        
+        // Attempt reconnection after a short delay - BUT ONLY IF STATE IS STILL DISCONNECTED
+        autoReconnectTimeoutRef.current = setTimeout(() => {
+          // CRITICAL: Check connectionStateRef (current state) and all guards using refs (not closure values)
+          const currentState = connectionStateRef.current;
+          const isIntentionallyDisconnected = isIntentionallyDisconnectedRef.current;
+          const hasConnected = hasConnectedRef.current;
+          const connectionLock = connectionLockRef.current;
+          
           console.log('🔄 Auto-reconnection check:', {
-            hasConnectedRef: hasConnectedRef.current,
-            isConnecting: isConnecting,
-            isIntentionallyDisconnected: isIntentionallyDisconnectedRef.current,
-            connectionLock: connectionLockRef.current,
-            sessionStatus: sessionStatus
+            connectionState: currentState,
+            hasConnected,
+            isIntentionallyDisconnected,
+            connectionLock
           });
           
-          if (!hasConnectedRef.current && !isConnecting && !isIntentionallyDisconnectedRef.current && !connectionLockRef.current) {
+          // ONLY allow reconnect if state is exactly DISCONNECTED and all guards pass
+          if (currentState === "DISCONNECTED" && !hasConnected && !isIntentionallyDisconnected && !connectionLock) {
             console.log('🔄 Auto-reconnecting due to lost connection...');
             connectToRealtime();
           } else {
-            console.log('🚫 Auto-reconnection blocked - connection in progress or intentionally disconnected');
+            console.log('🚫 Auto-reconnection blocked - state:', currentState);
           }
+          
+          autoReconnectTimeoutRef.current = null;
         }, 1000);
       }
     }
   };
+
+
+  // Avatar transcript tracking for incremental lipsync
+  // Track by itemId -> last processed word count to avoid duplicates
+  const avatarProcessedWordsRef = useRef<Map<string, number>>(new Map());
+  const currentAssistantItemIdRef = useRef<string | null>(null);
+  //const avatarProcessingTimeoutRef = useRef<Map<string, NodeJS.Timeout>>(new Map()); // Debounce rapid updates
+
+  /**
+   * Process transcript text for avatar lipsync.
+   * Tracks spoken words to avoid duplicates and buffers text for chunking.
+   * Handles edge cases: rapid updates, text length changes, errors, etc.
+   * 
+   * @param itemId - Transcript item ID
+   * @param fullText - Full accumulated text of the transcript item
+   * @param //isDelta - If true, this is an incremental update (delta)
+   * @param forceFlush - If true, flush remaining buffered text
+   */
+  
+  const processTranscriptForAvatar = useCallback(
+    async (
+      itemId: string,
+      fullText: string,
+      isDelta: boolean = false,
+      forceFlush: boolean = false
+    ) => {
+      const head = talkingHeadRef.current;
+      // Safety: Ensure head exists and has the required properties
+      if (!head?.animQueue || head.animClock == null) return;
+
+      try {
+        // 1. Role Guard: Only animate assistant speech
+        const item = transcriptItemsRef.current.find((i) => i.itemId === itemId);
+        if (!item || item.role !== "assistant") return;
+
+        // 2. NEW RESPONSE START: Reset the Pipeline
+        if (itemId !== currentAssistantItemIdRef.current) {
+          currentAssistantItemIdRef.current = itemId;
+          avatarProcessedWordsRef.current.set(itemId, 0);
+
+          // New response: reset queue and clock so visemes start from 0.
+          // Keep animTimeLast so the next animate() frame gets a small dt and clock advances smoothly.
+          head.animQueue = [];
+          head.animClock = 0;
+          if (typeof (head as any).animTimeLast === "number") (head as any).animTimeLast = performance.now();
+          
+          // Force state to speaking immediately
+          head.isSpeaking = true; 
+        }
+
+        // 3. Normalize text and Calculate "New Words"
+        // (Standard logic to handle spaces/newlines reliably)
+        const normalizedText = fullText.trim().replace(/\s+/g, " ");
+        const allWords = normalizedText.split(/\s+/).filter(Boolean);
+        const processedCount = avatarProcessedWordsRef.current.get(itemId) || 0;
+
+        // Edge case: Text shrank (e.g. correction) -> Reset tracking
+        if (allWords.length < processedCount) {
+          avatarProcessedWordsRef.current.set(itemId, 0);
+          return;
+        }
+
+        const newWords = allWords.slice(processedCount);
+        if (newWords.length === 0 && !forceFlush) return;
+
+        // 4. PREVENT RACE CONDITIONS: Update counter BEFORE awaiting
+        // If we waited until after the loop, a second rapid update from OpenAI 
+        // would enter here and process the exact same words again.
+        avatarProcessedWordsRef.current.set(itemId, allWords.length);
+
+        // 5. Chunking & Delivery
+        const AVATAR_WORDS_PER_CHUNK = 5;
+        const chunks: string[] = [];
+        
+        for (let i = 0; i < newWords.length; i += AVATAR_WORDS_PER_CHUNK) {
+          chunks.push(newWords.slice(i, i + AVATAR_WORDS_PER_CHUNK).join(" "));
+        }
+
+        for (const chunk of chunks) {
+          if (!chunk.trim()) continue;
+
+          // Re-assert speaking state (in case idle timer turned it off mid-stream)
+          head.isSpeaking = true;
+
+          // Process the chunk (This calls speakWithImprovedTiming internally)
+          // We await this to ensure sequential processing of chunks
+          //await processChunkForAvatar(head, chunk);
+        }
+
+      } catch (error) {
+        console.error("[AVATAR-LIPSYNC] Error:", error);
+      }
+    },
+    [] // Dependencies
+  );
 
   const handleServerEventRef = useHandleServerEvent({
     setSessionStatus,
@@ -130,7 +514,6 @@ export default function TeachingInterface({ classSession, onEndSession, sessionR
       }
       
       const data = await response.json();
-      console.log('Ephemeral token response:', data); // Debug log
       return data.client_secret.value; // Changed from .token to .value
     } catch (error) {
       console.error('Failed to fetch ephemeral key:', error);
@@ -194,11 +577,23 @@ export default function TeachingInterface({ classSession, onEndSession, sessionR
     // Generate unique connection ID for this attempt
     const connectionId = Math.random().toString(36).substr(2, 9);
     
-    // Prevent duplicate connections
-    if (sessionStatus === "CONNECTED" || sessionStatus === "CONNECTING" || isConnecting || hasConnectedRef.current || connectionLockRef.current) {
-      console.log('🚫 Connection blocked - already in progress or established:', {
+    // CRITICAL: Single-source-of-truth check - ONLY allow connection from IDLE or DISCONNECTED state
+    const currentState = connectionStateRef.current;
+    if (currentState !== "IDLE" && currentState !== "DISCONNECTED") {
+      console.log('🚫 Connection blocked - invalid state:', {
+        currentState,
         sessionStatus,
         isConnecting,
+        hasConnectedRef: hasConnectedRef.current,
+        connectionLock: connectionLockRef.current
+      });
+      return;
+    }
+    
+    // Additional guards for safety
+    if (hasConnectedRef.current || connectionLockRef.current) {
+      console.log('🚫 Connection blocked - already connected or locked:', {
+        currentState,
         hasConnectedRef: hasConnectedRef.current,
         connectionLock: connectionLockRef.current
       });
@@ -212,6 +607,9 @@ export default function TeachingInterface({ classSession, onEndSession, sessionR
     }
 
     console.log(`🔐 Acquiring connection lock... [${connectionId}]`);
+    
+    // ATOMIC STATE TRANSITION: IDLE/DISCONNECTED → CONNECTING
+    connectionStateRef.current = "CONNECTING";
     connectionLockRef.current = true; // Lock immediately to prevent race conditions
     globalConnectionId = connectionId;
     
@@ -222,13 +620,26 @@ export default function TeachingInterface({ classSession, onEndSession, sessionR
     
     setIsConnecting(true);
     setSessionStatus("CONNECTING");
-    hasConnectedRef.current = true;
+    hasConnectedRef.current = true; // Set early to prevent duplicate calls
 
     // Create a promise to track this connection
     globalConnectionPromise = (async () => {
       try {
+        // CRITICAL: Hard guard - fetchEphemeralKey() is ONLY allowed in CONNECTING state
+        if (connectionStateRef.current !== "CONNECTING") {
+          console.error(`🚫 ABORT: fetchEphemeralKey() called in invalid state: ${connectionStateRef.current}`);
+          throw new Error(`Cannot fetch ephemeral key: connection state is ${connectionStateRef.current}, expected CONNECTING`);
+        }
+        
         const EPHEMERAL_KEY = await fetchEphemeralKey();
+        // CRITICAL: Check state again after async fetchEphemeralKey() - might have been cancelled
+        if (connectionStateRef.current !== "CONNECTING") {
+          console.error(`🚫 ABORT: Connection cancelled during fetchEphemeralKey(), state: ${connectionStateRef.current}`);
+          throw new Error(`Connection cancelled: state changed to ${connectionStateRef.current}`);
+        }
+        
         if (!EPHEMERAL_KEY) {
+          connectionStateRef.current = "DISCONNECTED"; // State transition: CONNECTING → DISCONNECTED
           setSessionStatus("ERROR");
           setIsConnecting(false);
           hasConnectedRef.current = false;
@@ -267,9 +678,19 @@ export default function TeachingInterface({ classSession, onEndSession, sessionR
         dcRef.current = dc;
         mediaStreamRef.current = mediaStream;
 
+
         dc.addEventListener("open", () => {
+          // CRITICAL: Only process if still in CONNECTING state (might have been cancelled)
+          if (connectionStateRef.current !== "CONNECTING") {
+            console.warn(`🚫 Ignoring data channel open - state changed to ${connectionStateRef.current}`);
+            return;
+          }
+          
           logClientEvent({}, "data_channel.open");
           console.log(`✅ Data channel opened successfully - releasing connection lock [${connectionId}]`);
+          
+          // ATOMIC STATE TRANSITION: CONNECTING → CONNECTED
+          connectionStateRef.current = "CONNECTED";
           setSessionStatus("CONNECTED");
           setIsConnecting(false);
           hasConnectedRef.current = true; // Mark as successfully connected
@@ -285,22 +706,26 @@ export default function TeachingInterface({ classSession, onEndSession, sessionR
         });
         dc.addEventListener("close", () => {
           logClientEvent({}, "data_channel.close");
-          setSessionStatus("DISCONNECTED");
-          setIsConnecting(false);
-          hasConnectedRef.current = false;
-          connectionLockRef.current = false; // Release lock on close
+          // Only update state if this is the current connection
           if (globalConnectionId === connectionId) {
+            connectionStateRef.current = "DISCONNECTED"; // State transition: CONNECTED → DISCONNECTED
+            setSessionStatus("DISCONNECTED");
+            setIsConnecting(false);
+            hasConnectedRef.current = false;
+            connectionLockRef.current = false; // Release lock on close
             globalConnectionId = null;
             globalConnectionPromise = null;
           }
         });
         dc.addEventListener("error", (err: any) => {
           logClientEvent({ error: err }, "data_channel.error");
-          setSessionStatus("ERROR");
-          setIsConnecting(false);
-          hasConnectedRef.current = false;
-          connectionLockRef.current = false; // Release lock on error
+          // Only update state if this is the current connection
           if (globalConnectionId === connectionId) {
+            connectionStateRef.current = "DISCONNECTED"; // State transition: CONNECTING/CONNECTED → DISCONNECTED
+            setSessionStatus("ERROR");
+            setIsConnecting(false);
+            hasConnectedRef.current = false;
+            connectionLockRef.current = false; // Release lock on error
             globalConnectionId = null;
             globalConnectionPromise = null;
           }
@@ -346,8 +771,16 @@ export default function TeachingInterface({ classSession, onEndSession, sessionR
         }
         
         // Set error status with message
-        setSessionStatus("ERROR");
-        setIsConnecting(false);
+        // ATOMIC STATE TRANSITION: CONNECTING → DISCONNECTED (on error)
+        if (globalConnectionId === connectionId) {
+          connectionStateRef.current = "DISCONNECTED";
+          setSessionStatus("ERROR");
+          setIsConnecting(false);
+          hasConnectedRef.current = false;
+          connectionLockRef.current = false; // Release lock on error
+          globalConnectionId = null;
+          globalConnectionPromise = null;
+        }
         
         // Show error to user
         alert(errorMessage);
@@ -365,15 +798,6 @@ export default function TeachingInterface({ classSession, onEndSession, sessionR
           dcRef.current.close();
           dcRef.current = null;
         }
-        
-        setSessionStatus("ERROR");
-        setIsConnecting(false);
-        hasConnectedRef.current = false;
-        connectionLockRef.current = false; // Release lock on error
-        if (globalConnectionId === connectionId) {
-          globalConnectionId = null;
-          globalConnectionPromise = null;
-        }
       }
     })();
   };
@@ -381,6 +805,46 @@ export default function TeachingInterface({ classSession, onEndSession, sessionR
   const disconnectFromRealtime = () => {
     console.log('Disconnecting from realtime... (user initiated)');
     
+    // ATOMIC STATE TRANSITION: Any state → DISCONNECTING → DISCONNECTED
+    const previousState = connectionStateRef.current;
+    connectionStateRef.current = "DISCONNECTING";
+    
+    // Cancel any pending auto-reconnect timeout
+    if (autoReconnectTimeoutRef.current) {
+      clearTimeout(autoReconnectTimeoutRef.current);
+      autoReconnectTimeoutRef.current = null;
+      console.log('🛑 Cancelled pending auto-reconnect timeout');
+    }
+
+
+
+    if (typeof talkingHeadRef.current.stopVisemeAnimations === "function") {
+      talkingHeadRef.current.stopVisemeAnimations();
+    }
+    talkingHeadRef.current.animQueue = [];
+    if (talkingHeadRef.current.speechQueue) talkingHeadRef.current.speechQueue = [];
+    
+    // Reset mouth to neutral
+    if (talkingHeadRef.current.morphTargetInfluences) {
+      for (let i = 0; i < talkingHeadRef.current.morphTargetInfluences.length; i++) {
+        talkingHeadRef.current.cachedMesh.morphTargetInfluences[i] = 0;
+      }
+    }
+    
+
+
+    // Cancel global connection promise if it exists (this prevents fetchEphemeralKey() from completing)
+    if (globalConnectionPromise) {
+      console.log('🛑 Cancelling in-progress connection promise');
+      // Note: We can't actually cancel a promise, but we can prevent it from proceeding
+      // by checking connectionStateRef inside the promise
+      globalConnectionPromise = null;
+    }
+    
+    // Clear avatar tracking state
+    avatarProcessedWordsRef.current.clear();
+    currentAssistantItemIdRef.current = null;
+  
     // Mark as intentionally disconnected to prevent auto-reconnection
     isIntentionallyDisconnectedRef.current = true;
     
@@ -391,6 +855,9 @@ export default function TeachingInterface({ classSession, onEndSession, sessionR
     console.log('🧹 Clearing global connection state (real disconnect)');
     globalConnectionId = null;
     globalConnectionPromise = null;
+    
+    // Complete state transition: DISCONNECTING → DISCONNECTED
+    connectionStateRef.current = "DISCONNECTED";
     
     // Immediately clear the message handler to stop processing any new messages
     messageHandlerRef.current = null;
@@ -560,15 +1027,15 @@ export default function TeachingInterface({ classSession, onEndSession, sessionR
       }, 2000);
     }
     
-    // FINAL NUCLEAR OPTION: Try to stop ALL possible media streams
-    console.log('☢️ NUCLEAR CLEANUP: Attempting to stop all possible media streams...');
+    // FINAL OPTION: Try to stop ALL possible media streams
+    console.log('☢️ CLEANUP: Attempting to stop all possible media streams...');
     if (typeof window !== 'undefined') {
       // Try to access the global media stream registry (if available)
       setTimeout(() => {
-        // Force garbage collection of any lingering streams
+        // Force cleanup of any lingering streams
         if (window.gc) {
           window.gc();
-          console.log('🗑️ Forced garbage collection');
+          console.log('🗑️ Forced cleanup');
         }
         
         // Check browser media indicator after cleanup
@@ -583,14 +1050,84 @@ export default function TeachingInterface({ classSession, onEndSession, sessionR
     console.log('✅ Successfully disconnected from realtime - all audio capture and processing stopped');
   };
 
+
+  const resetAvatarLipsync = useCallback(() => {
+    const head = talkingHeadRef.current;
+    if (!head) return;
+    
+    // Stop current speech
+    head.isSpeaking = false;
+    
+    // Clear all viseme animations
+    if (head.animQueue) {
+      head.animQueue = head.animQueue.filter(
+        (item: any) => item.template?.name !== "viseme"
+      );
+    }
+    
+    // Clear speech queue
+    if (head.speechQueue) {
+      head.speechQueue = [];
+    }
+    
+    // Reset mouth morph targets
+    if (head.cachedMesh?.morphTargetInfluences) {
+      for (let i = 0; i < head.cachedMesh.morphTargetInfluences.length; i++) {
+        head.cachedMesh.morphTargetInfluences[i] = 0;
+      }
+    }
+  }, []);
+
   // Update ref so handleUserSpeech can access disconnectFromRealtime
   useEffect(() => {
     disconnectFromRealtimeRef.current = disconnectFromRealtime;
   }, [disconnectFromRealtime]);
-
+  
+  
   // Separate function for React Strict Mode cleanup
   const disconnectFromRealtimeReactCleanup = () => {
+    const currentState = connectionStateRef.current;
+    // CRITICAL: During React StrictMode, effects run: mount → cleanup → remount
+    // 
+    // Scenario 1: CONNECTING with active promise
+    //   - We're in the middle of initial connection (fetchEphemeralKey or createRealtimeConnection)
+    //   - Don't cancel - let it complete, state will be preserved for remount
+    //
+    // Scenario 2: CONNECTED state
+    //   - Connection already established successfully
+    //   - Don't disconnect during StrictMode cleanup - this is not user intent
+    //   - The connection should remain active across StrictMode remounts
+    //
+    // Only disconnect if:
+    //   - State is DISCONNECTED/IDLE (nothing to clean up)
+    //   - State is DISCONNECTING (already in progress)
+    //   - State is ERROR (connection failed, safe to clean up)
+    if (currentState === "CONNECTING" && globalConnectionPromise) {
+      console.log('🚫 Skipping disconnect during StrictMode cleanup - connection is still initializing');
+      console.log('   State:', currentState, 'Has active promise:', !!globalConnectionPromise);
+      console.log('   This is expected during React StrictMode double-mount in development');
+      console.log('   The connection will continue and complete - state will be preserved for remount');
+      return; // Don't cancel the in-flight connection
+    }
+    
+    if (currentState === "CONNECTED") {
+      console.log('🚫 Skipping disconnect during StrictMode cleanup - connection is already established');
+      console.log('   State:', currentState);
+      console.log('   This is expected during React StrictMode double-mount in development');
+      console.log('   The active connection will be preserved across remounts');
+      return; // Don't disconnect an active connection during StrictMode cleanup
+    }
+    
     console.log('Disconnecting from realtime... (React Strict Mode cleanup)');
+    
+    // ATOMIC STATE TRANSITION: Any state → DISCONNECTING → DISCONNECTED
+    connectionStateRef.current = "DISCONNECTING";
+    
+    // Cancel any pending auto-reconnect timeout
+    if (autoReconnectTimeoutRef.current) {
+      clearTimeout(autoReconnectTimeoutRef.current);
+      autoReconnectTimeoutRef.current = null;
+    }
     
     // Mark as intentionally disconnected to prevent auto-reconnection
     isIntentionallyDisconnectedRef.current = true;
@@ -598,8 +1135,11 @@ export default function TeachingInterface({ classSession, onEndSession, sessionR
     // Release connection lock immediately to prevent issues
     connectionLockRef.current = false;
     
-    // DO NOT clear global connection state during React cleanup
+    // DO NOT clear global connection state during React cleanup (preserve for remount)
     console.log('🚫 Preserving global connection state (React Strict Mode cleanup)');
+    
+    // Complete state transition: DISCONNECTING → DISCONNECTED
+    connectionStateRef.current = "DISCONNECTED";
     
     // Immediately clear the message handler to stop processing any new messages
     messageHandlerRef.current = null;
@@ -768,15 +1308,15 @@ export default function TeachingInterface({ classSession, onEndSession, sessionR
       }, 2000);
     }
     
-    // FINAL NUCLEAR OPTION: Try to stop ALL possible media streams
-    console.log('☢️ NUCLEAR CLEANUP: Attempting to stop all possible media streams...');
+    // FINAL OPTION: Try to stop ALL possible media streams
+    console.log('☢️ CLEANUP: Attempting to stop all possible media streams...');
     if (typeof window !== 'undefined') {
       // Try to access the global media stream registry (if available)
       setTimeout(() => {
-        // Force garbage collection of any lingering streams
+        // Force cleanup of any lingering streams
         if (window.gc) {
           window.gc();
-          console.log('🗑️ Forced garbage collection');
+          console.log('🗑️ Forced cleanup');
         }
         
         // Check browser media indicator after cleanup
@@ -790,6 +1330,8 @@ export default function TeachingInterface({ classSession, onEndSession, sessionR
     
     console.log('✅ Successfully disconnected from realtime - all audio capture and processing stopped');
   };
+
+
 
   const initializeSession = () => {
     // if (sessionStatus !== "CONNECTED") {
@@ -1034,16 +1576,21 @@ export default function TeachingInterface({ classSession, onEndSession, sessionR
     const effectId = Math.random().toString(36).substr(2, 6);
     console.log(`🎯 useEffect [${effectId}] - Mount/remount detected`);
     console.log(`🎯 useEffect [${effectId}] - Current state:`, {
+      connectionState: connectionStateRef.current,
       hasConnected: hasConnectedRef.current,
       sessionStatus,
       globalConnectionId,
       globalConnectionPromise: !!globalConnectionPromise
     });
     
-    // Only connect if we haven't already connected
-    if (!hasConnectedRef.current && sessionStatus === "DISCONNECTED") {
-      console.log(`🎯 useEffect [${effectId}] - Calling connectToRealtime`);
-      connectToRealtime();
+    // Only connect if state is IDLE or DISCONNECTED (single source of truth)
+    if (connectionStateRef.current === "IDLE" || connectionStateRef.current === "DISCONNECTED") {
+      if (!hasConnectedRef.current) {
+        console.log(`🎯 useEffect [${effectId}] - Calling connectToRealtime`);
+        connectToRealtime();
+      }
+    } else {
+      console.log(`🎯 useEffect [${effectId}] - Skipping connect, state is: ${connectionStateRef.current}`);
     }
     
     return () => {
@@ -1051,6 +1598,8 @@ export default function TeachingInterface({ classSession, onEndSession, sessionR
       disconnectFromRealtimeReactCleanup();
     };
   }, []); // Empty dependency array to run only once
+
+
 
   // Handle hydration and set correct starting slide
   useEffect(() => {
@@ -1127,6 +1676,35 @@ export default function TeachingInterface({ classSession, onEndSession, sessionR
     }
   }, [isUserSpeaking, showStartPrompt]);
 
+
+  // Pushes an explicit closed-mouth animation into the animQueue for the pause window,
+  // then advances the cursor. This makes the pause ACTIVELY animated (mouth held shut)
+  // rather than passively decaying, which is imperceptible at short durations.
+  function injectSilentPause(head: any, durationMs: number) {
+    if (!head || durationMs <= 0) return;
+    if (!head._lipsyncCursor || head._lipsyncCursor < head.animClock) {
+      head._lipsyncCursor = head.animClock;
+    }
+    const pauseStart = head._lipsyncCursor;
+    const pauseEnd   = pauseStart + durationMs;
+
+    // Push a viseme entry that holds all mouth morphs at 0 for the pause window.
+    // ts has 2 slots: [hold at 0 from start → end].
+    head.animQueue.push({
+      template: { name: 'viseme' },
+      ts: [pauseStart, pauseEnd],
+      vs: {
+        viseme_sil:   [0, 0],
+        mouthClose:   [0, 0],
+        jawOpen:      [0, 0],
+      },
+    });
+
+    head._lipsyncCursor = pauseEnd;
+  }
+
+
+
   // Function to set up the message handler with current closure
   const setMessageHandler = () => {
     console.log('🔧 Setting up message handler...');
@@ -1137,14 +1715,46 @@ export default function TeachingInterface({ classSession, onEndSession, sessionR
 
       // --- Track voice activity ---
       if (serverEvent.type === "input_audio_buffer.speech_started") {
-        setIsUserSpeaking(true);
-      } else if (serverEvent.type === "input_audio_buffer.speech_stopped") {
+        setIsUserSpeaking(true);  
+        const head = talkingHeadRef.current;
+        if (head && typeof head.stopVisemeAnimations === 'function') {
+          head.stopVisemeAnimations();
+        }
+        // Also drain the pending buffer so no more chunks get submitted
+        pendingTranscriptBufferRef.current = "";
+        if (pendingFlushTimeoutRef.current) {
+          clearTimeout(pendingFlushTimeoutRef.current);
+          pendingFlushTimeoutRef.current = null;
+        }
+      } // NEW — handle forced cancellations (slide changes, tool calls, etc.)
+      else if (serverEvent.type === "response.cancelled" || 
+              serverEvent.type === "output_audio_buffer.cleared") {
+        setIsAISpeaking(false);
+        const head = talkingHeadRef.current;
+        if (head && typeof head.stopVisemeAnimations === 'function') {
+          head.stopVisemeAnimations();
+        }
+        pendingTranscriptBufferRef.current = "";
+        if (pendingFlushTimeoutRef.current) {
+          clearTimeout(pendingFlushTimeoutRef.current);
+          pendingFlushTimeoutRef.current = null;
+        }
+      }else if (serverEvent.type === "input_audio_buffer.speech_stopped") {
         setIsUserSpeaking(false);
       }
       if (serverEvent.type === "output_audio_buffer.started") {
         setIsAISpeaking(true);
-      } else if (serverEvent.type === "output_audio_buffer.stopped") {
+      } 
+      else if (serverEvent.type === "output_audio_buffer.stopped") {
         setIsAISpeaking(false);
+        // Stop avatar lipsync when AI stops speaking (cleanup)
+        if (talkingHeadRef.current) {
+          talkingHeadRef.current.stopVisemeAnimations();
+          // talkingHeadRef.current.resetLips(); // ❌ Might crash
+          //talkingHeadRef.current.animQueue = []; // ✅ Clear queue
+          // Optional: Force mouth closed (if your avatar supports it)
+          // talkingHeadRef.current.speakText(""); 
+        }
       }
 
       // --- Guard phrases: intercept intentional interruptions ---
@@ -1219,11 +1829,75 @@ export default function TeachingInterface({ classSession, onEndSession, sessionR
 
             console.log(`📤 Function Response:`, functionResult);
           }
+
+
         });
       }
-
       // Pass to the default handler for other events
       handleServerEventRef.current(serverEvent);
+
+      if (serverEvent.type === "response.audio_transcript.delta") {
+        const raw = (serverEvent.delta || "").trim();
+        // if (!raw || /^[\s.,:;!?'"-]+$/.test(raw)) return;
+        // const normalized = raw.replace(/\s+/g, " ");
+        // pendingTranscriptBufferRef.current += (pendingTranscriptBufferRef.current ? " " : "") + normalized;
+        // BUFFER FOR PAUSES FOR AVATAR LIPSYNC
+        const isPunctuationOnly = /^[\s.,:;!?'"-]+$/.test(raw);
+        if (!raw) return;
+        if (isPunctuationOnly) {
+          // Attach directly to end of buffer without a space: "Hello" + "," → "Hello,"
+          pendingTranscriptBufferRef.current += raw;
+        } else {
+          const normalized = raw.replace(/\s+/g, " ");
+          pendingTranscriptBufferRef.current += (pendingTranscriptBufferRef.current ? " " : "") + normalized;
+        }
+
+        if (!pendingFlushTimeoutRef.current) {
+          pendingFlushTimeoutRef.current = setTimeout(() => {
+            const head = talkingHeadRef.current;
+            const buf = pendingTranscriptBufferRef.current;
+            pendingTranscriptBufferRef.current = "";
+            pendingFlushTimeoutRef.current = null;
+            if (!buf.trim()) return;
+            const text = buf.trim().replace(/\s+/g, " ");
+            if (!text) return;
+            if (!head || typeof head.speakFromTranscript !== "function") return;
+            if (process.env.NODE_ENV === "development") {
+              console.log("[AVATAR-LIPSYNC] speakFromTranscript chunk:", text.slice(0, 60) + (text.length > 60 ? "…" : ""));
+            }
+            //NEW — split on sentence boundaries and inject pauses between segments
+            const SENTENCE_PAUSE_MS = 320;  // full stop / ! / ?
+            const CLAUSE_PAUSE_MS   = 200;  // comma / semicolon / colon / em-dash
+
+            // Split keeping the delimiter attached to the preceding segment
+            const segments = text.split(/(?<=[.!?])\s+|(?<=[,;:\—])\s+/);
+
+            segments.forEach((segment, idx) => {
+              if (!segment.trim()) return;
+
+              // Strip punctuation before sending to lipsync — avatar doesn't need it
+              const cleanSegment = segment.trim().replace(/[.!?,;:\—"']+/g, "").trim();
+              if (cleanSegment) {
+                head.speakFromTranscript(cleanSegment, { append: true, wordsPerChunk: 8, wordDurationMs: 300 });
+              }
+
+              // Pause after this segment if there's another one following
+              if (idx < segments.length - 1) {
+                const pauseMs = /[.!?]/.test(segment.slice(-1)) ? SENTENCE_PAUSE_MS : CLAUSE_PAUSE_MS;
+                injectSilentPause(head, pauseMs);
+              }
+            });
+
+            // Also catch trailing punctuation at end of entire flushed text
+            const lastChar = text.trim().slice(-1);
+            if (/[.!?]/.test(lastChar)) {
+              injectSilentPause(head, SENTENCE_PAUSE_MS);
+            } else if (/[,;:]/.test(lastChar)) {
+              injectSilentPause(head, CLAUSE_PAUSE_MS);
+            }
+          }, SPEAK_FROM_TRANSCRIPT_THROTTLE_MS);
+        }
+      }
     };
 
     console.log('✅ Message handler set up successfully');
@@ -1332,8 +2006,8 @@ export default function TeachingInterface({ classSession, onEndSession, sessionR
         </div>
       )}
 
-      {/* Left Side - Slide Viewer (70%) */}
-      <div className="w-[80%] bg-white flex flex-col">
+      {/* Left Side - Slide Viewer (60%) */}
+      <div className="w-[60%] bg-white flex flex-col">
         {/* Header */}
         <div className="bg-blue-600 text-white p-4 flex justify-between items-center">
           <div className="flex items-center gap-4">
@@ -1415,6 +2089,18 @@ export default function TeachingInterface({ classSession, onEndSession, sessionR
             <ChevronRight size={20} />
           </button>
         </div>
+      </div>
+
+      {/* Middle - Avatar Display (20%) */}
+      <div className="w-[20%] bg-gradient-to-b from-slate-100 to-slate-50 border-l border-slate-200 flex flex-col items-center justify-center p-4">
+        <div 
+          ref={avatarContainerRef}
+          className="w-full h-full max-w-md max-h-[600px] rounded-lg overflow-hidden shadow-lg bg-white"
+          style={{
+            minHeight: "400px",
+            minWidth: "300px"
+          }}
+        />
       </div>
 
       {/* Right Side - Voice Assistant Panel (20%) */}
@@ -1643,9 +2329,9 @@ export default function TeachingInterface({ classSession, onEndSession, sessionR
             {sessionStatus === "CONNECTED" ? <PhoneOff size={16} /> : <Phone size={16} />}
             {sessionStatus === "CONNECTED" ? "Disconnect" : "Connect"}
           </button>
+          
         </div>
       </div>
-
       {/* Feedback Modal */}
       {showFeedbackModal && (
         <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
