@@ -43,13 +43,13 @@ const e = new THREE.Euler();
 const v = new THREE.Vector3();
 const w = new THREE.Vector3();
 const box = new THREE.Box3();
-const m = new THREE.Matrix4();
-const minv = new THREE.Matrix4();
-const origin = new THREE.Vector3();
-const forward = new THREE.Vector3(0, 0, 1);
+//const m = new THREE.Matrix4();
+//const minv = new THREE.Matrix4();
+//const origin = new THREE.Vector3();
+//const forward = new THREE.Vector3(0, 0, 1);
 const axisx = new THREE.Vector3(1, 0, 0);
-const axisy = new THREE.Vector3(0, 1, 0);
-const axisz = new THREE.Vector3(0, 0, 1);
+//const axisy = new THREE.Vector3(0, 1, 0);
+//const axisz = new THREE.Vector3(0, 0, 1);
 
 //new class for mapping!
 const PHONEME_CLASS = {
@@ -963,7 +963,7 @@ class TalkingHead {
       'RightHand': 'RightForeArm', 'RightHandMiddle1': 'RightHand'
     };
     const ikBones = [];
-    Object.entries(ikSetup).forEach( (x,i) => {
+    Object.entries(ikSetup).forEach( (x) => {
       const bone = new THREE.Bone();
       bone.name = x[0];
       if ( x[1] ) {
@@ -1268,7 +1268,7 @@ class TalkingHead {
 
       // If we already have a media source connected, disconnect it cleanly.
       if (this._mediaStreamSource) {
-        try { this._mediaStreamSource.disconnect(); } catch (e) {}
+        try { this._mediaStreamSource.disconnect(); } catch {}
         this._mediaStreamSource = null;
       }
       this._mediaStreamSource = this.audioCtx.createMediaStreamSource(stream);
@@ -3379,7 +3379,7 @@ _buildVisemeVs(visemeCode, peakValue) {
           if ( val && val.visemes && val.visemes.length ) {
             const d = val.times[ val.visemes.length-1 ] + val.durations[ val.visemes.length-1 ];
             for( let j=0; j<val.visemes.length; j++ ) {
-              const o =
+             // const o =
               // lipsyncAnim.push( {
               //   mark: markId,
               //   template: { name: 'viseme' },
@@ -3508,7 +3508,7 @@ _buildVisemeVs(visemeCode, peakValue) {
   * Stop background audio.
   */
   stopBackgroundAudio() {
-    try { this.audioBackgroundSource.stop(); } catch(error) {}
+    try { this.audioBackgroundSource.stop(); } catch {}
     this.audioBackgroundSource.disconnect();
   }
 
@@ -3717,7 +3717,7 @@ _buildVisemeVs(visemeCode, peakValue) {
         const timeout = new Promise((_r, rej) => setTimeout(() => rej("p2"), 1000));
         try {
           await Promise.race([resume, timeout]);
-        } catch(e) {
+        } catch {
           console.log("Can't play audio. Web Audio API suspended. This is often due to calling some speak method before the first user action, which is typically prevented by the browser.");
           this.playAudio(true);
           return;
@@ -3981,7 +3981,7 @@ _buildVisemeVs(visemeCode, peakValue) {
   * Pause speaking.
   */
   pauseSpeaking() {
-    try { this.audioSpeechSource.stop(); } catch(error) {}
+    try { this.audioSpeechSource.stop(); } catch {}
     this.audioPlaylist.length = 0;
     this.stateName = 'idle';
     this.isSpeaking = false;
@@ -3997,7 +3997,7 @@ _buildVisemeVs(visemeCode, peakValue) {
   * Stop speaking and clear the speech queue.
   */
   stopSpeaking() {
-    try { this.audioSpeechSource.stop(); } catch(error) {}
+    try { this.audioSpeechSource.stop(); } catch {}
     this.audioPlaylist.length = 0;
     this.speechQueue.length = 0;
     this.animQueue = this.animQueue.filter( x  => x.template.name !== 'viseme' && x.template.name !== 'subtitles' && x.template.name !== 'blendshapes' );
@@ -4067,7 +4067,7 @@ _buildVisemeVs(visemeCode, peakValue) {
         try {
           this.streamWorkletNode.disconnect();
           this.streamWorkletNode = null;
-        } catch (e) {
+        } catch {
           // Ignore errors during cleanup
         }
       }
@@ -4113,20 +4113,20 @@ _buildVisemeVs(visemeCode, peakValue) {
         if (event.data.type === 'playback-ended') {
           this._streamPause();
           if (this.onAudioEnd) {
-              try { this.onAudioEnd(); } catch(e) {}
+              try { this.onAudioEnd(); } catch {}
           }
         }
 
         // Forward diagnostic metrics if provided
         if (this.onMetrics && event.data.type === 'metrics') {
-          try { this.onMetrics(event.data); } catch(e) { /* ignore */ }
+          try { this.onMetrics(event.data); } catch { }
         }
       };
     }
 
     // Update metrics config if provided (can be different per session)
     if (opt.metrics) {
-      try { this.streamWorkletNode.port.postMessage({ type: 'config-metrics', data: opt.metrics }); } catch(e) {}
+      try { this.streamWorkletNode.port.postMessage({ type: 'config-metrics', data: opt.metrics }); } catch {}
     }
 
     this.resetLips();
@@ -4140,7 +4140,7 @@ _buildVisemeVs(visemeCode, peakValue) {
       const timeout = new Promise((_r, rej) => setTimeout(() => rej("p2"), 1000));
       try {
         await Promise.race([resume, timeout]);
-      } catch(e) {
+      } catch {
         console.warn("Can't play audio. Web Audio API suspended. This is often due to calling some speak method before the first user action, which is typically prevented by the browser.");
         return;
       }
@@ -4165,12 +4165,12 @@ _buildVisemeVs(visemeCode, peakValue) {
       const wasSpeaking = this.isSpeaking;
 
       if (this.streamWorkletNode) {
-          try { this.streamWorkletNode.port.postMessage({type: 'stop'}); } catch(e) {}
+          try { this.streamWorkletNode.port.postMessage({type: 'stop'}); } catch {}
       }
       this._streamPause(true);
 
       if (wasSpeaking && this.onAudioEnd) {
-          try { this.onAudioEnd(); } catch(e) {}
+          try { this.onAudioEnd(); } catch {}
       }
   }
 
@@ -4183,7 +4183,7 @@ _buildVisemeVs(visemeCode, peakValue) {
     if (this.streamWorkletNode) {
       try {
         this.streamWorkletNode.disconnect();
-      } catch(e) { /* ignore */ }
+      } catch { /* ignore */ }
       this.streamWorkletNode = null;
     }
     this.isStreaming = false;
@@ -4447,7 +4447,7 @@ _buildVisemeVs(visemeCode, peakValue) {
       if ( this.speakTo.objectLeftEye?.isObject3D ) {
 
         // Target eyes
-        const o = this.speakTo.armature.objectHead;
+        //const o = this.speakTo.armature.objectHead;
         this.speakTo.objectLeftEye.updateMatrixWorld(true);
         this.speakTo.objectRightEye.updateMatrixWorld(true);
         v.setFromMatrixPosition(this.speakTo.objectLeftEye.matrixWorld);
@@ -4761,7 +4761,7 @@ _buildVisemeVs(visemeCode, peakValue) {
   * Get slowdown.
   * @return {numeric} Slowdown factor.
   */
-  getSlowdownRate(k) {
+  getSlowdownRate() {
     return this.animSlowdownRate;
   }
 
@@ -4779,7 +4779,7 @@ _buildVisemeVs(visemeCode, peakValue) {
   * Get autorotate speed.
   * @return {numeric} Autorotate speed.
   */
-  getAutoRotateSpeed(k) {
+  getAutoRotateSpeed() {
     return this.controls.autoRotateSpeed;
   }
 
@@ -5087,7 +5087,7 @@ _buildVisemeVs(visemeCode, peakValue) {
       // Stop talking hands animation
       let ndx = this.animQueue.findIndex( y => y.template.name === "talkinghands" );
       if ( ndx !== -1 ) {
-        this.animQueue[ndx].ts = this.animQueue[ndx].ts.map( x => 0 );
+        this.animQueue[ndx].ts = this.animQueue[ndx].ts.map();
       }
 
       // Set gesture
@@ -5179,7 +5179,7 @@ _buildVisemeVs(visemeCode, peakValue) {
     if ( this.gesture ) {
       const gs = Object.entries(this.gesture);
       this.gesture = null;
-      for( const [p,val] of gs ) {
+      for( const [p] of gs ) {
         if ( this.poseTarget.props.hasOwnProperty(p) ) {
           this.poseTarget.props[p].copy( this.getPoseTemplateProp(p) );
           this.poseTarget.props[p].t = this.animClock;

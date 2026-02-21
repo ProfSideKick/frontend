@@ -31,16 +31,16 @@ const v = new THREE.Vector3();
 const v2 = new THREE.Vector3();
 const w = new THREE.Vector3();
 const w2 = new THREE.Vector3();
-const p = new THREE.Plane();
-const r = new THREE.Ray();
-const e = new THREE.Euler();
+//const p = new THREE.Plane();
+//const r = new THREE.Ray();
+//const e = new THREE.Euler();
 const q = new THREE.Quaternion();
 const q2 = new THREE.Quaternion();
 const m = new THREE.Matrix4();
 const minv = new THREE.Matrix4();
 
 // Axis
-const origin = new THREE.Vector3();
+//const origin = new THREE.Vector3();
 const forward = new THREE.Vector3(0, 0, 1);
 const axisx = new THREE.Vector3(1, 0, 0);
 const axisy = new THREE.Vector3(0, 1, 0);
@@ -890,7 +890,7 @@ class DynamicBones {
     if ( tmp.bones.length ) {
       this.helpers.isActive = true;
       const geom = new THREE.BufferGeometry();
-      const vertices = tmp.bones.map( x => [0,0,0] ).flat();
+      const vertices = tmp.bones.map().flat(); //removed x
       geom.setAttribute( 'position', new THREE.Float32BufferAttribute( vertices, 3 ) );
       const c1 = new THREE.Color( this.opt.helperBoneColor1 );
       const c2 = new THREE.Color( this.opt.helperBoneColor2 );
@@ -911,11 +911,11 @@ class DynamicBones {
     tmp = this.helpers.lines;
     if ( tmp.bones.length ) {
       const geom = new THREE.BufferGeometry();
-      const vertices = tmp.bones.map( x => [0,0,0,0,0,0] ).flat();
+      const vertices = tmp.bones.map( ).flat(); //removed x
       geom.setAttribute( 'position', new THREE.Float32BufferAttribute( vertices, 3 ) );
       const c1 = new THREE.Color( this.opt.helperLinkColor1 );
       const c2 = new THREE.Color( this.opt.helperLinkColor2 );
-      const colors = tmp.bones.map( x => [c1.r,c1.g,c1.b,c2.r,c2.g,c2.b] ).flat();
+      const colors = tmp.bones.map( ).flat(); //removed  x => [c1.r,c1.g,c1.b,c2.r,c2.g,c2.b]
       geom.setAttribute( 'color', new THREE.Float32BufferAttribute( colors, 3 ) );
       const material = new THREE.LineBasicMaterial( {
         vertexColors: true, depthTest: false, depthWrite: false,

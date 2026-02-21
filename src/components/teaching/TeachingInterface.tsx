@@ -413,83 +413,6 @@ export default function TeachingInterface({ classSession, onEndSession, sessionR
    * @param forceFlush - If true, flush remaining buffered text
    */
   
-  const processTranscriptForAvatar = useCallback(
-    async (
-      itemId: string,
-      fullText: string,
-      isDelta: boolean = false,
-      forceFlush: boolean = false
-    ) => {
-      const head = talkingHeadRef.current;
-      // Safety: Ensure head exists and has the required properties
-      if (!head?.animQueue || head.animClock == null) return;
-
-      try {
-        // 1. Role Guard: Only animate assistant speech
-        const item = transcriptItemsRef.current.find((i) => i.itemId === itemId);
-        if (!item || item.role !== "assistant") return;
-
-        // 2. NEW RESPONSE START: Reset the Pipeline
-        if (itemId !== currentAssistantItemIdRef.current) {
-          currentAssistantItemIdRef.current = itemId;
-          avatarProcessedWordsRef.current.set(itemId, 0);
-
-          // New response: reset queue and clock so visemes start from 0.
-          // Keep animTimeLast so the next animate() frame gets a small dt and clock advances smoothly.
-          head.animQueue = [];
-          head.animClock = 0;
-          if (typeof (head as any).animTimeLast === "number") (head as any).animTimeLast = performance.now();
-          
-          // Force state to speaking immediately
-          head.isSpeaking = true; 
-        }
-
-        // 3. Normalize text and Calculate "New Words"
-        // (Standard logic to handle spaces/newlines reliably)
-        const normalizedText = fullText.trim().replace(/\s+/g, " ");
-        const allWords = normalizedText.split(/\s+/).filter(Boolean);
-        const processedCount = avatarProcessedWordsRef.current.get(itemId) || 0;
-
-        // Edge case: Text shrank (e.g. correction) -> Reset tracking
-        if (allWords.length < processedCount) {
-          avatarProcessedWordsRef.current.set(itemId, 0);
-          return;
-        }
-
-        const newWords = allWords.slice(processedCount);
-        if (newWords.length === 0 && !forceFlush) return;
-
-        // 4. PREVENT RACE CONDITIONS: Update counter BEFORE awaiting
-        // If we waited until after the loop, a second rapid update from OpenAI 
-        // would enter here and process the exact same words again.
-        avatarProcessedWordsRef.current.set(itemId, allWords.length);
-
-        // 5. Chunking & Delivery
-        const AVATAR_WORDS_PER_CHUNK = 5;
-        const chunks: string[] = [];
-        
-        for (let i = 0; i < newWords.length; i += AVATAR_WORDS_PER_CHUNK) {
-          chunks.push(newWords.slice(i, i + AVATAR_WORDS_PER_CHUNK).join(" "));
-        }
-
-        for (const chunk of chunks) {
-          if (!chunk.trim()) continue;
-
-          // Re-assert speaking state (in case idle timer turned it off mid-stream)
-          head.isSpeaking = true;
-
-          // Process the chunk (This calls speakWithImprovedTiming internally)
-          // We await this to ensure sequential processing of chunks
-          //await processChunkForAvatar(head, chunk);
-        }
-
-      } catch (error) {
-        console.error("[AVATAR-LIPSYNC] Error:", error);
-      }
-    },
-    [] // Dependencies
-  );
-
   const handleServerEventRef = useHandleServerEvent({
     setSessionStatus,
     selectedAgentName: "teachingAssistant",
@@ -806,7 +729,7 @@ export default function TeachingInterface({ classSession, onEndSession, sessionR
     console.log('Disconnecting from realtime... (user initiated)');
     
     // ATOMIC STATE TRANSITION: Any state → DISCONNECTING → DISCONNECTED
-    const previousState = connectionStateRef.current;
+    //const previousState = connectionStateRef.current;
     connectionStateRef.current = "DISCONNECTING";
     
     // Cancel any pending auto-reconnect timeout
@@ -1049,34 +972,6 @@ export default function TeachingInterface({ classSession, onEndSession, sessionR
     
     console.log('✅ Successfully disconnected from realtime - all audio capture and processing stopped');
   };
-
-
-  const resetAvatarLipsync = useCallback(() => {
-    const head = talkingHeadRef.current;
-    if (!head) return;
-    
-    // Stop current speech
-    head.isSpeaking = false;
-    
-    // Clear all viseme animations
-    if (head.animQueue) {
-      head.animQueue = head.animQueue.filter(
-        (item: any) => item.template?.name !== "viseme"
-      );
-    }
-    
-    // Clear speech queue
-    if (head.speechQueue) {
-      head.speechQueue = [];
-    }
-    
-    // Reset mouth morph targets
-    if (head.cachedMesh?.morphTargetInfluences) {
-      for (let i = 0; i < head.cachedMesh.morphTargetInfluences.length; i++) {
-        head.cachedMesh.morphTargetInfluences[i] = 0;
-      }
-    }
-  }, []);
 
   // Update ref so handleUserSpeech can access disconnectFromRealtime
   useEffect(() => {

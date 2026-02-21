@@ -67,7 +67,7 @@ class PlaybackWorklet extends AudioWorkletProcessor {
               framesProcessed: this._framesProcessed
             }
           });
-        } catch (_) { }
+        } catch { }
       }
       return;
     }
@@ -109,7 +109,7 @@ class PlaybackWorklet extends AudioWorkletProcessor {
     }
   }
 
-  process(inputs, outputs, parameters) {
+  process(outputs ) {   //removed inputs and parameters
     const outputChannel = outputs[0]?.[0];
     if (!outputChannel) {
       return true; // Keep alive even if output is temporarily disconnected
@@ -154,7 +154,7 @@ class PlaybackWorklet extends AudioWorkletProcessor {
                     framesProcessed: this._framesProcessed
                   }
                 });
-              } catch (_) { }
+              } catch { }
             }
             this.reset(); // Reset to IDLE state for reuse
             break; // Exit while loop
@@ -217,7 +217,7 @@ class PlaybackWorklet extends AudioWorkletProcessor {
               framesProcessed: this._framesProcessed
             }
           });
-        } catch (_) { }
+        } catch { }
         // Don't reset max tracker - keep session peak until idle
       }
     }
