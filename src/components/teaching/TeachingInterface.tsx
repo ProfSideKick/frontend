@@ -1351,6 +1351,7 @@ export default function TeachingInterface({ classSession, onEndSession, sessionR
     try {
       // Include feedback in session run metadata
       const sessionRunMetadata = {
+        disconnectFromRealtime();
         ended_by_user: true,
         feedback: {
           rating: feedbackData.rating,
@@ -1381,6 +1382,7 @@ export default function TeachingInterface({ classSession, onEndSession, sessionR
   };
 
   const handleSkipFeedback = () => {
+    disconnectFromRealtime();
     setShowFeedbackModal(false);
     if (typeof onEndSession === 'function') {
       onEndSession({ ended_by_user: true });
