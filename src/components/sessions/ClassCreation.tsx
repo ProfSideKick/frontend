@@ -675,7 +675,7 @@ export default function ClassCreation() {
                 ) : (
                   <div className="space-y-2">
                     <p className="text-sm text-gray-600">
-                      Drag & drop or click to browse (PDF, PPT, PPTX up to 50MB)
+                      Drag & drop or click to browse (PDF up to 50MB)
                     </p>
                   </div>
                 )}
