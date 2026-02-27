@@ -1348,10 +1348,11 @@ export default function TeachingInterface({ classSession, onEndSession, sessionR
   };
 
   const handleFeedbackSubmit = async () => {
+    disconnectFromRealtime();
     try {
       // Include feedback in session run metadata
       const sessionRunMetadata = {
-        disconnectFromRealtime();
+        
         ended_by_user: true,
         feedback: {
           rating: feedbackData.rating,
