@@ -11,7 +11,7 @@ interface CollapsibleSectionProps {
   onToggle: () => void;
   children: React.ReactNode;
 }
-
+ 
 function CollapsibleSection({ title, isOpen, onToggle, children }: CollapsibleSectionProps) {
   return (
     <fieldset className="space-y-4 p-4 border border-gray-200 rounded-lg">
@@ -42,7 +42,7 @@ interface AISettingsProps {
 export default function AISettings({ sessionId, onClose }: AISettingsProps) {
   const { token } = useAuth();
   const [settings, setSettings] = useState({
-    model: "gpt-4o-realtime-preview-2024-12-17",
+    model: "gpt-4o-realtime",
     voice: "alloy",
     temperature: 0.8,
     instructions: "",
@@ -292,7 +292,7 @@ export default function AISettings({ sessionId, onClose }: AISettingsProps) {
           <fieldset className="space-y-4 p-4 border border-gray-200 rounded-lg">
             <legend className="text-lg font-semibold text-blue-700 px-2">Core AI Settings</legend>
             
-            <div>
+            {*<div>
               <label htmlFor="model" className="block text-sm font-medium text-gray-700 mb-1">AI Model</label>
               <select 
                 data-path="model" 
@@ -305,6 +305,15 @@ export default function AISettings({ sessionId, onClose }: AISettingsProps) {
                 <option value="gpt-4o-mini-realtime-preview-2024-12-17">GPT-4o Mini Realtime</option>
                 <option value="gpt-realtime">GPT Realtime</option>
               </select>
+            </div>*}
+            <div>
+              <label htmlFor="model" className="block text-sm font-medium text-gray-700 mb-1">AI Model</label>
+              <input
+                type="text"
+                value="GPT Realtime"
+                readOnly
+                className="w-full p-2 border border-gray-200 bg-gray-50 rounded-lg text-gray-600"
+              />
             </div>
 
             <div>
