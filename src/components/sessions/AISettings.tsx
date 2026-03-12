@@ -292,20 +292,6 @@ export default function AISettings({ sessionId, onClose }: AISettingsProps) {
           <fieldset className="space-y-4 p-4 border border-gray-200 rounded-lg">
             <legend className="text-lg font-semibold text-blue-700 px-2">Core AI Settings</legend>
             
-            {*<div>
-              <label htmlFor="model" className="block text-sm font-medium text-gray-700 mb-1">AI Model</label>
-              <select 
-                data-path="model" 
-                id="model" 
-                value={settings.model} 
-                onChange={handleInputChange} 
-                className="w-full p-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
-              >
-                <option value="gpt-4o-realtime-preview-2024-12-17">GPT-4o Realtime</option>
-                <option value="gpt-4o-mini-realtime-preview-2024-12-17">GPT-4o Mini Realtime</option>
-                <option value="gpt-realtime">GPT Realtime</option>
-              </select>
-            </div>*}
             <div>
               <label htmlFor="model" className="block text-sm font-medium text-gray-700 mb-1">AI Model</label>
               <input
