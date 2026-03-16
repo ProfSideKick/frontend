@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
 import { 
   Plus, CheckCircle, Circle, ExternalLink, Download, 
   FileText, AlertTriangle, X, Edit2
@@ -24,7 +24,7 @@ interface MaterialSelectionModal {
 }
 
 export default function SessionMaterials({ sessionId, courseId }: SessionMaterialsProps) {
-  const { token } = useAuth();
+  const { getToken } = useAuth();
   
   // State
   const [sessionMaterials, setSessionMaterials] = useState<SessionMaterial[]>([]);
@@ -44,12 +44,14 @@ export default function SessionMaterials({ sessionId, courseId }: SessionMateria
   const [instructionsText, setInstructionsText] = useState('');
 
   // Fetch session materials
-  const fetchSessionMaterials = async () => {
-    if (!token) return;
+  const fetchSessionMaterials = useCallback(async () => {
     
     try {
       setLoading(true);
       setError(null);
+
+      const token = await getToken();
+      if (!token) return;
 
       const response = await fetch(config.getApiUrl(`/api/course-materials/sessions/${sessionId}`), {
         headers: {
@@ -70,13 +72,15 @@ export default function SessionMaterials({ sessionId, courseId }: SessionMateria
     } finally {
       setLoading(false);
     }
-  };
+  }, [sessionId, getToken]);
 
   // Fetch available course materials for selection
   const fetchAvailableMaterials = async () => {
-    if (!token) return;
     
     try {
+      const token = await getToken();
+      if (!token) return;
+
       const response = await fetch(config.getApiUrl(`/api/course-materials/courses/${courseId}`), {
         headers: {
           'Authorization': `Bearer ${token}`,
@@ -108,9 +112,12 @@ export default function SessionMaterials({ sessionId, courseId }: SessionMateria
     }
   };
 
+  // useEffect(() => {
+  //   fetchSessionMaterials();
+  // }, [sessionId, getToken]);
   useEffect(() => {
     fetchSessionMaterials();
-  }, [sessionId, token]);
+  }, [fetchSessionMaterials]);
 
   // Toggle material selection in modal
   const toggleMaterialSelection = (materialId: string) => {
@@ -127,11 +134,14 @@ export default function SessionMaterials({ sessionId, courseId }: SessionMateria
 
   // Add selected materials to session
   const addMaterialsToSession = async () => {
-    if (!token || materialModal.selectedMaterials.size === 0) return;
+    if (materialModal.selectedMaterials.size === 0) return;
 
     try {
       setSaving(true);
       setError(null);
+
+      const token = await getToken();
+      if (!token) return;
 
       // Add each selected material to the session
       const promises = Array.from(materialModal.selectedMaterials).map(materialId => {
@@ -165,9 +175,11 @@ export default function SessionMaterials({ sessionId, courseId }: SessionMateria
 
   // Toggle material inclusion
   const toggleMaterialInclusion = async (sessionMaterialId: string, currentStatus: boolean) => {
-    if (!token) return;
 
     try {
+      const token = await getToken();
+      if (!token) return;
+
       const response = await fetch(config.getApiUrl(`/api/course-materials/session-links/${sessionMaterialId}`), {
         method: 'PUT',
         headers: {
@@ -190,9 +202,10 @@ export default function SessionMaterials({ sessionId, courseId }: SessionMateria
 
   // Update usage instructions
   const updateInstructions = async (sessionMaterialId: string, instructions: string) => {
-    if (!token) return;
-
     try {
+      const token = await getToken();
+      if (!token) return;
+
       const response = await fetch(config.getApiUrl(`/api/course-materials/session-links/${sessionMaterialId}`), {
         method: 'PUT',
         headers: {
@@ -217,9 +230,12 @@ export default function SessionMaterials({ sessionId, courseId }: SessionMateria
 
   // Remove material from session
   const removeMaterialFromSession = async (sessionMaterialId: string) => {
-    if (!token || !confirm('Remove this material from the session?')) return;
+    if (!confirm('Remove this material from the session?')) return;
 
     try {
+      const token = await getToken();
+      if (!token) return;
+
       const response = await fetch(config.getApiUrl(`/api/course-materials/session-links/${sessionMaterialId}`), {
         method: 'DELETE',
         headers: {

@@ -45,7 +45,7 @@ export default function SessionDetailsPage() {
   const sessionId = params.sessionId as string;
   const isSharedLink = searchParams.get('shared') === 'true';
   const router = useRouter();
-  const { token } = useAuth();
+  const { getToken } = useAuth();
   const [copiedId, setCopiedId] = useState(false);
   const [sessionDetails, setSessionDetails] = useState<SessionDetails | null>(null);
   const [loading, setLoading] = useState(true);
@@ -58,7 +58,7 @@ export default function SessionDetailsPage() {
   // Fetch session details from backend
   useEffect(() => {
     const fetchSessionDetails = async () => {
-      if (!token && !isSharedLink) return;
+      if (!getToken && !isSharedLink) return;
       
       try {
         setLoading(true);
@@ -68,6 +68,7 @@ export default function SessionDetailsPage() {
           'Content-Type': 'application/json',
         };
         
+        const token = await getToken();
         if (token) {
           headers['Authorization'] = `Bearer ${token}`;
         }
@@ -117,7 +118,7 @@ export default function SessionDetailsPage() {
     };
     
     fetchSessionDetails();
-  }, [sessionId, token]);
+  }, [sessionId, getToken, isSharedLink]);
 
   const copySessionId = async () => {
     try {
@@ -146,8 +147,11 @@ export default function SessionDetailsPage() {
       };
       
       // Only add authorization for authenticated users
-      if (token && !isSharedLink) {
-        headers['Authorization'] = `Bearer ${token}`;
+      if (!isSharedLink) {
+        const token = await getToken();
+        if (token) {
+          headers['Authorization'] = `Bearer ${token}`;
+        }
       }
       
       // Create a new session run

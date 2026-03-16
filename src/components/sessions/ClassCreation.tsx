@@ -46,7 +46,7 @@ function CollapsibleSection({ title, isOpen, onToggle, children }: CollapsibleSe
 export default function ClassCreation() {
   const router = useRouter();
   const searchParams = useSearchParams();
-  const { token } = useAuth();
+  const { getToken } = useAuth();
 
   // const [, setDefaultPrompt] = useState("");
 
@@ -337,6 +337,8 @@ export default function ClassCreation() {
     const fetchMaterials = async () => {
       if (!selectedCourseId) return;
       try {
+        const token = await getToken();
+        if (!token) return;
         const res = await fetch(
           config.getApiUrl(`/api/course-materials/courses/${selectedCourseId}`),
           {
@@ -354,7 +356,7 @@ export default function ClassCreation() {
       }
     };
     fetchMaterials();
-  }, [selectedCourseId, token]);
+  }, [selectedCourseId, getToken]);
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -365,6 +367,8 @@ export default function ClassCreation() {
     setError(null);
 
     try {
+      const token = await getToken();
+      if (!token) return; 
       // Create structured instructions JSON
       const structuredInstructions = {
         version: "1.0",

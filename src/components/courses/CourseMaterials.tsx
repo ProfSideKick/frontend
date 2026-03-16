@@ -28,7 +28,7 @@ const MATERIAL_TYPE_OPTIONS = [
 ];
 
 export default function CourseMaterials({ courseId }: CourseMaterialsProps) {
-  const { token } = useAuth();
+  const { getToken } = useAuth();
   
   // State
   const [materials, setMaterials] = useState<CourseMaterial[]>([]);
@@ -55,11 +55,12 @@ export default function CourseMaterials({ courseId }: CourseMaterialsProps) {
 
   // Fetch materials
   const fetchMaterials = async () => {
-    if (!token) return;
-    
     try {
       setLoading(true);
-      setError(null);
+      setError(null); 
+
+      const token = await getToken();
+      if (!token) return;
 
       const response = await fetch(config.getApiUrl(`/api/course-materials/courses/${courseId}`), {
         headers: {
@@ -84,16 +85,18 @@ export default function CourseMaterials({ courseId }: CourseMaterialsProps) {
 
   useEffect(() => {
     fetchMaterials();
-  }, [courseId, token]);
+  }, [courseId,  getToken]);
 
   // Handle form submission
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!token) return;
 
     try {
       setUploading(true);
       setError(null);
+
+      const token = await getToken();
+      if (!token) return; 
 
       if (materialForm.file) {
         // Upload file with material creation
@@ -163,9 +166,12 @@ export default function CourseMaterials({ courseId }: CourseMaterialsProps) {
 
   // Delete material
   const handleDelete = async (materialId: string) => {
-    if (!token || !confirm('Are you sure you want to delete this material?')) return;
+    if (!confirm('Are you sure you want to delete this material?')) return;
 
     try {
+      const token = await getToken();
+      if (!token) return;
+      
       const response = await fetch(config.getApiUrl(`/api/course-materials/${materialId}`), {
         method: 'DELETE',
         headers: {

@@ -43,7 +43,7 @@ interface Toast {
 export default function ManageStudentsPage() {
   const params = useParams();
   const router = useRouter();
-  const { token } = useAuth();
+  const { getToken } = useAuth();
   const courseId = params.courseId as string;
 
   // State
@@ -82,13 +82,13 @@ export default function ManageStudentsPage() {
   // Fetch data
   useEffect(() => {
     const fetchData = async () => {
-      if (!token) return;
-      
       try {
         setLoading(true);
         setError(null);
 
-        // Fetch course details
+        const token = await getToken();
+        if (!token) return;
+
         const courseResponse = await fetch(config.getApiUrl(`/api/courses/${courseId}`), {
           headers: {
             'Authorization': `Bearer ${token}`,
@@ -142,7 +142,7 @@ export default function ManageStudentsPage() {
     };
 
     fetchData();
-  }, [courseId, token]);
+  }, [courseId, getToken]);
 
   // Filter students based on search
   const filteredStudents = students.filter(student => 
@@ -161,6 +161,9 @@ export default function ManageStudentsPage() {
     setEnrollingStudent(true);
     
     try {
+      // Add at the top of handleEnrollStudent try block:
+      const token = await getToken();
+      if (!token) return;
       const response = await fetch(config.getApiUrl(`/api/courses/${courseId}/enroll`), {
         method: 'POST',
         headers: {
@@ -219,6 +222,9 @@ export default function ManageStudentsPage() {
     if (!selectedStudent) return;
 
     try {
+      // Add at the top of handleEnrollStudent try block:
+      const token = await getToken();
+      if (!token) return;
       const response = await fetch(config.getApiUrl(`/api/courses/${courseId}/students/${selectedStudent.id}`), {
         method: 'DELETE',
         headers: {

@@ -22,7 +22,7 @@ interface SlidesPreviewProps {
 }
 
 export default function SlidesPreview({ slides, sessionId }: SlidesPreviewProps) {
-  const { token } = useAuth();
+  const { getToken } = useAuth();
   const [currentPage, setCurrentPage] = useState(1);
   const [selectedSlide, setSelectedSlide] = useState<SlideData | null>(null);
   const [slidesPerPage, setSlidesPerPage] = useState(12);
@@ -88,13 +88,11 @@ export default function SlidesPreview({ slides, sessionId }: SlidesPreviewProps)
   };
 
   const handleRegenerateSlide = async (slide: SlideData) => {
-    if (!token) {
-      console.error('No authentication token available');
-      return;
-    }
-
     setIsRegenerating(true);
     try {
+      const token = await getToken();
+      if (!token) return;
+
       const response = await fetch(
         config.getApiUrl(`/api/sessions/${sessionId}/slides/${slide.id}/vision`),
         {
@@ -136,13 +134,15 @@ export default function SlidesPreview({ slides, sessionId }: SlidesPreviewProps)
   };
 
   const handleSaveContent = async (slide: SlideData) => {
-    if (!token) {
-      console.error('No authentication token available');
-      return;
-    }
-
     setIsSavingContent(true);
+
     try {
+      const token = await getToken();
+      if (!token)
+      {
+          console.error('No authentication token available');
+          return;
+      }
       const backendUrl = process.env.NEXT_PUBLIC_BACKEND_URL || 'http://localhost:8000';
       const response = await fetch(
         `${backendUrl}/api/sessions/${sessionId}/slides/${slide.id}/content`,
@@ -190,13 +190,14 @@ export default function SlidesPreview({ slides, sessionId }: SlidesPreviewProps)
   };
 
   const handleAddSlide = async (file: File) => {
-    if (!token) {
-      console.error('No authentication token available');
-      return;
-    }
-
     setIsAddingSlide(true);
+
     try {
+      const token = await getToken();
+      if (!token) {
+        console.error('No authentication token available');
+        return;
+      }
       const formData = new FormData();
       formData.append('slide_image', file);
       formData.append('vision_instructions', 'You are a helpful assistant that can analyze the slide image and provide a detailed description of the content.');
@@ -232,17 +233,18 @@ export default function SlidesPreview({ slides, sessionId }: SlidesPreviewProps)
   };
 
   const handleDeleteSlide = async (slideId: number) => {
-    if (!token) {
-      console.error('No authentication token available');
-      return;
-    }
-
+    
     if (!confirm('Are you sure you want to delete this slide? This action cannot be undone.')) {
       return;
     }
 
     setIsDeletingSlide(true);
     try {
+      const token = await getToken();
+      if (!token) {
+        console.error('No authentication token available');
+        return;
+      }
       const response = await fetch(
         config.getApiUrl(`/api/sessions/${sessionId}/slides/${slideId}`),
         {
@@ -274,13 +276,14 @@ export default function SlidesPreview({ slides, sessionId }: SlidesPreviewProps)
   };
 
   const handleReplaceImage = async (slideId: number, file: File) => {
-    if (!token) {
-      console.error('No authentication token available');
-      return;
-    }
-
+    
     setIsReplacingImage(true);
     try {
+      const token = await getToken();
+      if (!token) {
+        console.error('No authentication token available');
+        return;
+      }
       const formData = new FormData();
       formData.append('slide_image', file);
       
@@ -332,13 +335,14 @@ export default function SlidesPreview({ slides, sessionId }: SlidesPreviewProps)
   };
 
   const handleReorderSlides = async (newOrder: number[]) => {
-    if (!token) {
-      console.error('No authentication token available');
-      return;
-    }
-
+    
     setIsReordering(true);
     try {
+      const token = await getToken();
+      if (!token) {
+        console.error('No authentication token available');
+        return;
+      }
       const response = await fetch(
         config.getApiUrl(`/api/sessions/${sessionId}/slides/reorder`),
         {

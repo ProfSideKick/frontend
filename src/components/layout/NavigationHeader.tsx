@@ -15,15 +15,19 @@ export default function NavigationHeader() {
   const publicPages = ['/', '/about', '/contact', '/login', '/register'];
   const isPublicPage = publicPages.includes(pathname);
 
-  const handleLogout = async () => {
-    try {
-      await logout();
-      router.push('/login');
-    } catch (error) {
-      console.error('Logout failed:', error);
-      // Force redirect to login even if logout API fails
-      router.push('/login');
-    }
+  // const handleLogout = async () => {
+  //   try {
+  //     await logout();
+  //     router.push('/login');
+  //   } catch (error) {
+  //     console.error('Logout failed:', error);
+  //     // Force redirect to login even if logout API fails
+  //     router.push('/login');
+  //   }
+  // };
+  const handleLogout = () => {
+    setShowUserMenu(false);
+    logout();  // Auth0 redirects to /auth/logout — don't override it
   };
 
 
@@ -137,7 +141,8 @@ export default function NavigationHeader() {
                       <button
                         onClick={() => {
                           setShowUserMenu(false);
-                          handleLogout();
+                          // handleLogout();  // Don't call logout here — let Auth0 handle it with its own redirect
+                          logout();
                         }}
                         className="w-full text-left px-4 py-2 text-red-600 hover:bg-red-50 transition-colors flex items-center gap-2"
                       >

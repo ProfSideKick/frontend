@@ -24,7 +24,7 @@ import {
 export default function CourseDetailPage() {
   const router = useRouter();
   const params = useParams();
-  const { user, token } = useAuth();
+  const { user, getToken } = useAuth();
   const { courses, getCourseSessions } = useCourses();
   
   const courseId = params.courseId as string;
@@ -35,10 +35,8 @@ export default function CourseDetailPage() {
 
   useEffect(() => {
     const fetchCourseDetails = async () => {
-      if (!courseId || !token) {
-        if (!token) {
-          setLoading(false);
-        }
+      if (!courseId) {
+        setLoading(false);
         return;
       }
 
@@ -46,10 +44,34 @@ export default function CourseDetailPage() {
         setLoading(true);
         setError(null);
 
-        // Find course in the courses list
+        const token = await getToken();
+        if (!token) {
+          setError('Authentication required');
+          setLoading(false);
+          return;
+        }
+
+        // Find course in the courses list first
         const foundCourse = courses.find(c => c.course_id === courseId);
         if (foundCourse) {
           setCourse(foundCourse);
+        } else {
+          // Courses list not loaded yet — fetch directly from backend
+          const { config } = await import('@/lib/config');
+          const courseResponse = await fetch(config.getApiUrl(`/api/courses/${courseId}`), {
+            headers: {
+              'Authorization': `Bearer ${token}`,
+              'Content-Type': 'application/json',
+            },
+          });
+          if (courseResponse.ok) {
+            const courseData = await courseResponse.json();
+            setCourse(courseData);
+          } else {
+            setError('Course not found');
+            setLoading(false);
+            return;
+          }
         }
 
         // Fetch course sessions only if we have a token
@@ -64,7 +86,7 @@ export default function CourseDetailPage() {
     };
 
     fetchCourseDetails();
-  }, [courseId, courses, getCourseSessions, token]);
+  }, [courseId, courses, getCourseSessions, getToken]);
 
   const handleJoinSession = (sessionId: string) => {
     router.push(`/courses/${courseId}/sessions/${sessionId}`);

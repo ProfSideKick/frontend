@@ -26,7 +26,7 @@ interface CourseSettings {
 export default function CourseSettingsPage() {
   const params = useParams();
   const router = useRouter();
-  const { token } = useAuth();
+  const { getToken } = useAuth();
   const courseId = params.courseId as string;
 
   // State
@@ -40,13 +40,15 @@ export default function CourseSettingsPage() {
   // Fetch course settings
   useEffect(() => {
     const fetchCourse = async () => {
-      if (!token) return;
-      
       try {
         setLoading(true);
         setError(null);
 
+        const token = await getToken();
+        if (!token) return;
+
         const response = await fetch(config.getApiUrl(`/api/courses/${courseId}`), {
+          method: 'PUT',
           headers: {
             'Authorization': `Bearer ${token}`,
             'Content-Type': 'application/json',
@@ -85,7 +87,7 @@ export default function CourseSettingsPage() {
     };
 
     fetchCourse();
-  }, [courseId, token]);
+  }, [courseId,getToken]);
 
   // Check for changes
   useEffect(() => {
@@ -112,8 +114,10 @@ export default function CourseSettingsPage() {
     setSaving(true);
     
     try {
+      const token = await getToken();
+      if (!token) return;   
       const response = await fetch(config.getApiUrl(`/api/courses/${courseId}`), {
-        method: 'PUT',
+        method: 'GET',
         headers: {
           'Authorization': `Bearer ${token}`,
           'Content-Type': 'application/json',
