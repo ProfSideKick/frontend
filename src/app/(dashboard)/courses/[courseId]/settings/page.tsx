@@ -40,15 +40,14 @@ export default function CourseSettingsPage() {
   // Fetch course settings
   useEffect(() => {
     const fetchCourse = async () => {
+      const token = await getToken();
+      if (!token) return;
+      
       try {
         setLoading(true);
         setError(null);
 
-        const token = await getToken();
-        if (!token) return;
-
         const response = await fetch(config.getApiUrl(`/api/courses/${courseId}`), {
-          method: 'PUT',
           headers: {
             'Authorization': `Bearer ${token}`,
             'Content-Type': 'application/json',
@@ -112,12 +111,11 @@ export default function CourseSettingsPage() {
     if (!course || !hasChanges) return;
 
     setSaving(true);
-    
+    const token = await getToken();
+    if (!token) return;
     try {
-      const token = await getToken();
-      if (!token) return;   
       const response = await fetch(config.getApiUrl(`/api/courses/${courseId}`), {
-        method: 'GET',
+        method: 'PUT',
         headers: {
           'Authorization': `Bearer ${token}`,
           'Content-Type': 'application/json',
