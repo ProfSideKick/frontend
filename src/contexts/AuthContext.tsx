@@ -674,6 +674,7 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
             first_name: auth0User.given_name ?? '',
             last_name: auth0User.family_name ?? '',
             role: (auth0User['role'] as string) ?? 'professor',
+            email_verified: auth0User.email_verified ?? false, 
           }),
         })
         .then(res => res.json())
