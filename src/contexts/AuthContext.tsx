@@ -680,7 +680,6 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
         .then(res => res.json())
         .then(data => {
           if (data?.id) {
-            // Store full DB user — this is what the UI should use
             setDbUser({
               id: String(data.id),
               username: data.username ?? '',
@@ -690,17 +689,59 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
               role: data.role ?? 'professor',
               createdAt: data.createdAt ?? new Date().toISOString(),
             });
-
-            // Redirect new users (placeholder firstName) to complete profile
-            // Only fires once per registration via sessionStorage flag
+        
+            const currentPath = window.location.pathname;
+        
+            // ── Not verified yet → show "check your email" page
+            if (!data.email_verified) {
+              if (currentPath !== '/verify-email-pending') {
+                window.location.href = '/verify-email-pending';
+              }
+              return;
+            }
+        
+            // ── Verified professor waiting for approval
+            // if (!data.is_approved && data.role === 'professor') {
+            //   if (currentPath !== '/pending-approval') {
+            //     window.location.href = '/pending-approval';
+            //   }
+            //   return;
+            }
+        
+            // ── Verified but profile incomplete → complete profile
             const isNewUser = data.firstName === 'User' && /\d{6}$/.test(data.username ?? '');
             const alreadyRedirected = sessionStorage.getItem('profile_completed');
-            if (isNewUser && !alreadyRedirected && window.location.pathname !== '/complete-profile') {
+            if (isNewUser && !alreadyRedirected && currentPath !== '/complete-profile') {
               sessionStorage.setItem('profile_completed', 'pending');
               window.location.href = '/complete-profile';
+              return;
             }
           }
         })
+        // .then(data => {
+        //   if (data?.id) {
+        //     // Store full DB user — this is what the UI should use
+        //     setDbUser({
+        //       id: String(data.id),
+        //       username: data.username ?? '',
+        //       email: data.email ?? auth0User.email ?? '',
+        //       firstName: data.firstName ?? '',
+        //       lastName: data.lastName ?? '',
+        //       role: data.role ?? 'professor',
+        //       createdAt: data.createdAt ?? new Date().toISOString(),
+        //     });
+
+        //     // Redirect new users (placeholder firstName) to complete profile
+        //     // Only fires once per registration via sessionStorage flag
+        //     const isNewUser = data.firstName === 'User' && /\d{6}$/.test(data.username ?? '');
+        //     const alreadyRedirected = sessionStorage.getItem('profile_completed');
+        //     if (isNewUser && !alreadyRedirected && window.location.pathname !== '/complete-profile') {
+        //       sessionStorage.setItem('profile_completed', 'pending');
+        //       window.location.href = '/complete-profile';
+        //     }
+        //   }
+        // })
+          
         .catch(err => console.error('sync-user failed:', err));
       });
     }
