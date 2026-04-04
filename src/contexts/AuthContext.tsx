@@ -706,7 +706,7 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
             //     window.location.href = '/pending-approval';
             //   }
             //   return;
-            }
+            // }
         
             // ── Verified but profile incomplete → complete profile
             const isNewUser = data.firstName === 'User' && /\d{6}$/.test(data.username ?? '');

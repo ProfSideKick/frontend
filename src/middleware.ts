@@ -10,7 +10,7 @@ export async function middleware(request: NextRequest) {
   }
 
   // Public routes — add any others your app has
-  const publicRoutes = ["/", "/login", "/register", "/complete-profile"];
+  const publicRoutes = ["/", "/login", "/register", "/complete-profile", "/verify-email-pending"];
   if (publicRoutes.includes(request.nextUrl.pathname)) {
     return authRes;
   }
