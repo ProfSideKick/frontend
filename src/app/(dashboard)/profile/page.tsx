@@ -40,7 +40,7 @@ const TABS = [
 export default function ProfilePage() {
   const router = useRouter();
   const searchParams = useSearchParams();
-  const { user, logout } = useAuth();
+  const { user, logout, getToken, refreshUser } = useAuth();
   
   // Active tab state
   const [activeTab, setActiveTab] = useState(searchParams.get('tab') || 'general');
@@ -201,13 +201,33 @@ export default function ProfilePage() {
     setMessage(null);
 
     try {
-      // Simulate API call - replace with actual API endpoint
-      await new Promise(resolve => setTimeout(resolve, 1000));
-      
+      const token = await getToken();
+      if (!token) return;
+
+      const response = await fetch(`${process.env.NEXT_PUBLIC_BACKEND_URL}/api/users/profile`, {
+        method: 'PUT',
+        headers: {
+          'Authorization': `Bearer ${token}`,
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          firstName: personalInfo.firstName,
+          lastName: personalInfo.lastName,
+          email: personalInfo.email,
+          username: personalInfo.username,
+        }),
+      });
+
+      if (!response.ok) {
+        const data = await response.json();
+        throw new Error(data.detail || 'Failed to update profile');
+      }
+
+      await refreshUser();
       setMessage({ type: 'success', text: 'Personal information updated successfully!' });
     } catch (error) {
       console.error('Error updating personal information:', error);
-      setMessage({ type: 'error', text: 'Failed to update personal information. Please try again.' });
+      setMessage({ type: 'error', text: error instanceof Error ? error.message : 'Failed to update personal information.' });
     } finally {
       setIsSaving(false);
     }
