@@ -24,6 +24,7 @@ export interface AuthContextType {
   checkAuth: () => Promise<void>;
   getToken: () => Promise<string | null>;
   syncComplete: boolean;
+  refreshUser: () => Promise<void>;
 }
 
 const AuthContext = createContext<AuthContextType | undefined>(undefined);
@@ -187,11 +188,34 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
   const refreshToken = async () => {};
   const checkAuth = async () => {};
 
+  const refreshUser = useCallback(async () => {
+    const accessToken = await getToken();
+    if (!accessToken) return;
+    try {
+      const res = await fetch(`${process.env.NEXT_PUBLIC_BACKEND_URL}/api/users/profile`, {
+        headers: { 'Authorization': `Bearer ${accessToken}` },
+      });
+      if (!res.ok) return;
+      const data = await res.json();
+      setDbUser({
+        id: String(data.id),
+        username: data.username ?? '',
+        email: data.email ?? '',
+        firstName: data.firstName ?? '',
+        lastName: data.lastName ?? '',
+        role: data.role ?? 'professor',
+        createdAt: data.createdAt ?? new Date().toISOString(),
+      });
+    } catch (err) {
+      console.error('refreshUser failed:', err);
+    }
+  }, [getToken]);
+
   return (
     <AuthContext.Provider value={{
       user, token: null, isAuthenticated, isLoading,
       login, logout, refreshToken, checkAuth, getToken,
-      syncComplete,
+      syncComplete, refreshUser,
     }}>
       {children}
     </AuthContext.Provider>
