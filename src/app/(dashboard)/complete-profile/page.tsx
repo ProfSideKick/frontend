@@ -7,7 +7,7 @@ import { config } from '@/lib/config';
 
 export default function CompleteProfilePage() {
   const router = useRouter();
-  const { user, getToken, syncComplete } = useAuth();
+  const { user, getToken, syncComplete, refreshUser } = useAuth();
   const [form, setForm] = useState({ firstName: '', lastName: '', username: '', role: '' });
   const [error, setError] = useState<string | null>(null);
   const [saving, setSaving] = useState(false);
@@ -46,6 +46,7 @@ export default function CompleteProfilePage() {
       }
 
       sessionStorage.removeItem('profile_completed');
+      await refreshUser();
       router.push('/dashboard');
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Something went wrong');
