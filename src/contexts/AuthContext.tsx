@@ -607,6 +607,7 @@ export interface AuthContextType {
   refreshToken: () => Promise<void>;
   checkAuth: () => Promise<void>;
   getToken: () => Promise<string | null>;
+  syncComplete: boolean;
 }
 
 const AuthContext = createContext<AuthContextType | undefined>(undefined);
@@ -624,6 +625,7 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
 
   // Store full DB user so UI reflects DB values, not just Auth0 token values
   const [dbUser, setDbUser] = useState<User | null>(null);
+  const [syncComplete, setSyncComplete] = useState(false);
 
   const tokenCacheRef = useRef<{ token: string; fetchedAt: number } | null>(null);
   const tokenFetchInFlightRef = useRef<Promise<string | null> | null>(null);
@@ -680,6 +682,7 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
         .then(res => res.json())
         .then(data => {
           if (data?.id) {
+            setSyncComplete(true);
             setDbUser({
               id: String(data.id),
               username: data.username ?? '',
@@ -772,6 +775,7 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
     <AuthContext.Provider value={{
       user, token: null, isAuthenticated, isLoading,
       login, logout, refreshToken, checkAuth, getToken,
+      syncComplete,
     }}>
       {children}
     </AuthContext.Provider>
