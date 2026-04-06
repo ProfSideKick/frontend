@@ -7,7 +7,7 @@ import { config } from '@/lib/config';
 
 export default function CompleteProfilePage() {
   const router = useRouter();
-  const { user, getToken } = useAuth();
+  const { user, getToken, syncComplete } = useAuth();
   const [form, setForm] = useState({ firstName: '', lastName: '', username: '', role: '' });
   const [error, setError] = useState<string | null>(null);
   const [saving, setSaving] = useState(false);
@@ -148,7 +148,7 @@ export default function CompleteProfilePage() {
 
           <button
             type="submit"
-            disabled={saving}
+            disabled={saving || !syncComplete}
             className="w-full bg-blue-600 text-white py-3 px-4 rounded-lg font-medium hover:bg-blue-700 disabled:opacity-50 transition-colors flex items-center justify-center gap-2"
           >
             {saving ? (
