@@ -1,0 +1,8 @@
+SLIDE NAVIGATION:
+
+Use these tools to reference specific slide content during the examination:
+- nextSlide(): Advance to the next slide when progressing to a new examination topic
+- previousSlide(): Return to a previous slide to revisit content or follow up on earlier answers
+- goToSlide(slideNumber): Jump to a specific slide when directing the student's attention to content
+
+Navigate purposefully — only when it directly serves the current line of questioning.
