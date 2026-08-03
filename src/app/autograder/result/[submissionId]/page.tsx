@@ -323,7 +323,7 @@ export default function AutograderFeedbackPage() {
                 : "bg-slate-100 text-slate-600 hover:bg-slate-200"
             }`}
           >
-            Handwritten Solution
+            Student Solutions
           </button>
           <button
             onClick={() => handlePdfButton("webassign")}
@@ -333,7 +333,7 @@ export default function AutograderFeedbackPage() {
                 : "bg-slate-100 text-slate-600 hover:bg-slate-200"
             }`}
           >
-            WebAssign Questions
+            Questions
           </button>
         </div>
       </header>
@@ -361,7 +361,7 @@ export default function AutograderFeedbackPage() {
             <SAEPdfViewer
               key={`${submissionId}-${activeFile}`}
               fetchPdf={fetchActivePdf}
-              label={activeFile === "handwritten" ? "Handwritten Solution" : "WebAssign Questions"}
+              label={activeFile === "handwritten" ? "Student Solutions" : "Questions"}
             />
           </div>
         </div>

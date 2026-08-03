@@ -595,7 +595,7 @@ export default function AutograderSubmitPage() {
             <div className="mt-4 space-y-4">
               <div>
                 <label className="block text-sm font-medium text-slate-700">
-                  Handwritten Solution (PDF) <span className="text-red-500">*</span>
+                  Student Solutions (PDF) <span className="text-red-500">*</span>
                 </label>
                 <input
                   type="file" accept=".pdf" disabled={isGrading}
@@ -605,7 +605,7 @@ export default function AutograderSubmitPage() {
               </div>
               <div>
                 <label className="block text-sm font-medium text-slate-700">
-                  WebAssign Questions (PDF) <span className="text-red-500">*</span>
+                  Questions (PDF) <span className="text-red-500">*</span>
                 </label>
                 <input
                   type="file" accept=".pdf" disabled={isGrading}
@@ -720,13 +720,13 @@ export default function AutograderSubmitPage() {
               <PdfViewer
                 submissionId={sseSubmissionId}
                 fileType="handwritten"
-                label="Handwritten Solution"
+                label="Student Solutions"
                 height={520}
               />
               <PdfViewer
                 submissionId={sseSubmissionId}
                 fileType="webassign"
-                label="WebAssign Questions"
+                label="Questions"
                 height={520}
               />
             </div>
