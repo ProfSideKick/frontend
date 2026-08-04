@@ -11,6 +11,7 @@ import { createRealtimeConnection, checkWebRTCSupport } from "@/lib/realtimeConn
 import { classifyTurn } from "@/lib/turnClassifier";
 import teachingAssistant from "@/constants/teachingAssistant";
 import { config } from "@/lib/config";
+import AuthenticatedImg from "@/components/common/AuthenticatedImg";
 
 // Global connection tracking to prevent React Strict Mode issues
 let globalConnectionId: string | null = null;
@@ -1403,17 +1404,11 @@ export default function TeachingInterface({ classSession, onEndSession, sessionR
           <div className="w-full max-w-7xl relative">
             {currentSlideData?.imagePath ? (
               <>
-                <img
+                <AuthenticatedImg
                   src={getCorrectImageUrl(currentSlideData.imagePath)}
                   alt={currentSlideData?.title}
+                  token={token}
                   className="w-full h-auto rounded-lg shadow-lg transition-all duration-300"
-                  onError={(e) => {
-                    console.error('Failed to load slide image:', getCorrectImageUrl(currentSlideData.imagePath));
-                    console.error('Error details:', e);
-                  }}
-                  onLoad={() => {
-                    console.log('Successfully loaded slide image:', getCorrectImageUrl(currentSlideData.imagePath));
-                  }}
                 />
               </>
             ) : (

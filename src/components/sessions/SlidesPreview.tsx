@@ -4,6 +4,7 @@ import React, { useState, useEffect, useRef } from 'react';
 import { ChevronLeft, ChevronRight, Maximize2, Image as ImageIcon, RefreshCw, Edit3, Plus, Trash2, Upload, GripVertical } from 'lucide-react';
 import { useAuth } from '@/contexts/AuthContext';
 import { config } from '@/lib/config';
+import AuthenticatedImg from '@/components/common/AuthenticatedImg';
 
 // Routing header — tells nginx which backend to forward this request to.
 // Set NEXT_PUBLIC_FRONTEND_INSTANCE=autograder in the autograder Vercel env vars.
@@ -443,16 +444,11 @@ export default function SlidesPreview({ slides, sessionId }: SlidesPreviewProps)
     // If we have an image URL, use it; otherwise create a text preview
     if (imageUrl) {
       return (
-        <img 
-          src={imageUrl} 
+        <AuthenticatedImg
+          src={imageUrl}
+          token={token}
           alt={`Slide ${slide.slideNumber}`}
           className="w-full h-full object-cover"
-          onError={(e) => {
-            // Fallback to text preview if image fails to load
-            const target = e.target as HTMLImageElement;
-            target.style.display = 'none';
-            target.nextElementSibling?.classList.remove('hidden');
-          }}
         />
       );
     }
@@ -635,8 +631,9 @@ export default function SlidesPreview({ slides, sessionId }: SlidesPreviewProps)
                   <GripVertical className="w-5 h-5 text-gray-400 flex-shrink-0" />
                   <div className="w-16 h-12 bg-white dark:bg-gray-800 rounded border border-gray-200 dark:border-gray-700 flex-shrink-0 overflow-hidden">
                     {imageUrl ? (
-                      <img 
-                        src={imageUrl} 
+                      <AuthenticatedImg
+                        src={imageUrl}
+                        token={token}
                         alt={`Slide ${slide.slideNumber}`}
                         className="w-full h-full object-cover"
                       />
@@ -765,8 +762,9 @@ export default function SlidesPreview({ slides, sessionId }: SlidesPreviewProps)
             <div className="p-6 max-h-[calc(90vh-8rem)] overflow-y-auto">
               {getImageUrl(selectedSlide) ? (
                 <div className="mb-6 relative group">
-                  <img 
-                    src={getImageUrl(selectedSlide) || ''}
+                  <AuthenticatedImg
+                    src={getImageUrl(selectedSlide)}
+                    token={token}
                     alt={`Slide ${selectedSlide.slideNumber}`}
                     className="w-full max-h-96 object-contain rounded-lg border"
                   />

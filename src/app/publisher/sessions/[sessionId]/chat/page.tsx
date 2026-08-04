@@ -17,6 +17,7 @@ import React, {
 } from 'react';
 import { useParams, useRouter } from 'next/navigation';
 import { config } from '@/lib/config';
+import AuthenticatedImg from '@/components/common/AuthenticatedImg';
 import { avatarApi } from '@/lib/avatarApi';
 import type { AvatarResponse } from '@/types/avatar';
 import RoleSelector, { type SelectedRole } from '@/components/sessions/RoleSelector';
@@ -346,6 +347,7 @@ function DocumentViewer({ slides }: { slides: SlideData[] }) {
 
   const slide = studentSlides[current];
   const imageUrl = slide.imagePath ? config.getApiUrl(slide.imagePath) : null;
+  const token = useToken();
 
   return (
     <div className="flex flex-col h-full min-h-0 bg-gray-900">
@@ -371,24 +373,12 @@ function DocumentViewer({ slides }: { slides: SlideData[] }) {
       {/* Slide content — image if available, text card otherwise */}
       <div className="flex-1 overflow-y-auto flex items-start justify-center min-h-0">
         {imageUrl ? (
-          <>
-            <img
-              src={imageUrl}
-              alt={slide.title || `Slide ${slide.slideNumber}`}
-              className="w-full h-auto object-contain"
-              onError={(e) => {
-                (e.target as HTMLImageElement).style.display = 'none';
-                const fb = (e.target as HTMLImageElement).nextElementSibling as HTMLElement;
-                if (fb) fb.style.display = 'flex';
-              }}
-            />
-            {/* Fallback shown by onError handler above */}
-            <div style={{ display: 'none' }}
-              className="w-full flex-col items-center justify-center gap-2 text-center p-4">
-              <ImageIcon size={24} className="text-gray-700 dark:text-gray-300" />
-              <p className="text-xs text-gray-600 dark:text-gray-400">Image failed to load</p>
-            </div>
-          </>
+          <AuthenticatedImg
+            src={imageUrl}
+            token={token}
+            alt={slide.title || `Slide ${slide.slideNumber}`}
+            className="w-full h-auto object-contain"
+          />
         ) : (
           <div className="w-full h-full flex flex-col bg-gray-800 text-white">
             {slide.title && (
@@ -420,7 +410,7 @@ function DocumentViewer({ slides }: { slides: SlideData[] }) {
                   i === current ? 'border-blue-500' : 'border-transparent opacity-50 hover:opacity-80'
                 }`} style={{ width: 40, height: 30 }}>
                 {tUrl
-                  ? <img src={tUrl} alt="" className="w-full h-full object-cover" onError={(e) => { (e.target as HTMLImageElement).style.display = 'none'; }} />
+                  ? <AuthenticatedImg src={tUrl} token={token} alt="" className="w-full h-full object-cover" />
                   : (
                     <div className="w-full h-full bg-gray-700 flex flex-col items-center justify-center gap-0.5 px-1 overflow-hidden">
                       <span className="text-[8px] text-gray-500 font-bold leading-none">{s.slideNumber}</span>
