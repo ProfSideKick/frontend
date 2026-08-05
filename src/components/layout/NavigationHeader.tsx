@@ -49,7 +49,7 @@ export default function NavigationHeader() {
           >
             <Image
               src="/images/logo.png"
-              alt="MyOS Logo"
+              alt="Profsidekick Logo"
               width={40}
               height={40}
               className="object-contain rounded-full"
@@ -57,7 +57,7 @@ export default function NavigationHeader() {
                 (e.target as HTMLImageElement).style.display = 'none';
               }}
             />
-            <span className="text-2xl font-bold text-blue-900 dark:text-blue-400">MyOS</span>
+            <span className="text-2xl font-bold text-blue-900 dark:text-blue-400">Profsidekick</span>
           </button>
 
           {/* Actions */}

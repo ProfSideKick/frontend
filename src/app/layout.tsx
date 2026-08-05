@@ -8,7 +8,7 @@ import { ThemeProvider } from "next-themes";
 import { Toaster } from "sonner";
 
 export const metadata: Metadata = {
-  title: "MyOS",
+  title: "Profsidekick",
   description: "Interactive AI-powered presentations for professors",
   icons: {
     icon: [
