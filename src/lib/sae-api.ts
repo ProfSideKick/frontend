@@ -115,17 +115,23 @@ export async function linkAvatarToAssessment(
 }
 
 /** Update the grading prompt snapshot for an assessment.
- *  Pass null to reset to the system default Math prompt. */
+ *  Pass null to reset to the system default Math prompt.
+ *  includeReferenceFiles toggles the built-in precalculus reference PDFs;
+ *  omit it to leave the setting unchanged. */
 export async function updateAssessmentPrompt(
   assessmentId: string,
   gradingPrompt: string | null,
+  includeReferenceFiles?: boolean,
 ): Promise<SAEAssessmentRow> {
   const res = await fetch(
     `${API}/api/sae/publisher/assessments/${assessmentId}/prompt`,
     {
       method: "PATCH",
       headers: { "Content-Type": "application/json", ...authHeaders() },
-      body: JSON.stringify({ grading_prompt: gradingPrompt }),
+      body: JSON.stringify({
+        grading_prompt: gradingPrompt,
+        ...(includeReferenceFiles !== undefined && { include_reference_files: includeReferenceFiles }),
+      }),
     }
   );
   return handleResponse<SAEAssessmentRow>(res);

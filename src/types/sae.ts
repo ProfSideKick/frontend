@@ -9,6 +9,7 @@ export interface SAEAssessmentRow {
   description: string | null;
   is_active: boolean;
   grading_prompt_snapshot: string | null;
+  include_reference_files: boolean;
   avatar_id: string | null;
   created_at: string;
 }
@@ -73,6 +74,7 @@ export interface SAESubmissionResultPublisher extends SAESubmissionResult {
 export interface SAEStudentDetail extends SAEStudentRow {
   submissions: SAESubmissionResultPublisher[];
   grading_prompt_snapshot: string | null;
+  include_reference_files: boolean;
 }
 
 /**

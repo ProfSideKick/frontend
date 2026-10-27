@@ -104,6 +104,13 @@ export default function PublisherSAEPage() {
   const [promptDirty, setPromptDirty] = useState(false);
   const [promptError, setPromptError] = useState("");
   const [loadingDefaultPrompt, setLoadingDefaultPrompt] = useState(false);
+  const [includeRefs, setIncludeRefs] = useState(true);
+
+  const selectedAssessment = assessments.find((a) => a.id === selectedAssessmentId);
+  // The system default prompt describes the five-PDF reference setup; flag it
+  // when the reference files are turned off so the professor replaces it.
+  const promptMismatch =
+    !includeRefs && /receive five PDFs|Static Reference Context/i.test(editingPrompt);
 
   function toast(text: string, kind: "success" | "error" = "success") {
     const id = ++toastCounter.current;
@@ -268,6 +275,7 @@ export default function PublisherSAEPage() {
     if (!assessment) return;
     setPromptError("");
     setPromptDirty(false);
+    setIncludeRefs(assessment.include_reference_files ?? true);
     if (assessment.grading_prompt_snapshot) {
       setEditingPrompt(assessment.grading_prompt_snapshot);
       setShowEditPrompt(true);
@@ -313,7 +321,7 @@ export default function PublisherSAEPage() {
     setSavingPrompt(true);
     setPromptError("");
     try {
-      const updated = await updateAssessmentPrompt(selectedAssessmentId, editingPrompt);
+      const updated = await updateAssessmentPrompt(selectedAssessmentId, editingPrompt, includeRefs);
       setAssessments((prev) => prev.map((a) => (a.id === updated.id ? updated : a)));
       setPromptDirty(false);
       setShowEditPrompt(false);
@@ -461,6 +469,18 @@ export default function PublisherSAEPage() {
           >
             {loadingDefaultPrompt ? "Loading…" : "Edit Prompt for Grading"}
           </button>
+          {selectedAssessment && (
+            <span
+              title="Whether grading includes the built-in precalculus rubric and graded solutions"
+              className={`rounded-full px-2.5 py-1 text-xs font-medium whitespace-nowrap ${
+                selectedAssessment.include_reference_files
+                  ? "bg-blue-50 text-blue-700"
+                  : "bg-slate-100 text-slate-600"
+              }`}
+            >
+              Precalc references: {selectedAssessment.include_reference_files ? "On" : "Off"}
+            </span>
+          )}
         </div>
 
         {/* Search */}
@@ -755,6 +775,38 @@ export default function PublisherSAEPage() {
               Edits take effect on the next submission — past grades are not changed.
             </p>
 
+            <label className="flex items-start gap-3 rounded-md border border-slate-200 bg-slate-50 px-3 py-2.5">
+              <input
+                type="checkbox"
+                checked={includeRefs}
+                onChange={(e) => {
+                  setIncludeRefs(e.target.checked);
+                  setPromptDirty(true);
+                }}
+                className="mt-0.5 h-4 w-4 rounded border-slate-300 text-blue-600 focus:ring-blue-500"
+              />
+              <span className="text-sm">
+                <span className="font-medium text-slate-800">
+                  Use built-in precalculus reference materials
+                </span>{" "}
+                <span className="text-slate-600">
+                  (sample rubric, graded WebAssign, graded handwritten solution)
+                </span>
+                <span className="mt-1 block text-xs text-slate-500">
+                  Turn this off for any assessment that isn&apos;t the precalculus placement exam.
+                  When off, the AI only sees the student&apos;s two PDFs and your prompt, so your
+                  prompt should contain the questions&apos; solutions, point values and grading rules.
+                </span>
+              </span>
+            </label>
+
+            {promptMismatch && (
+              <p className="rounded-md border border-amber-200 bg-amber-50 px-3 py-2 text-sm text-amber-800">
+                This prompt still refers to the reference PDFs. Replace it with your own grading
+                instructions before saving.
+              </p>
+            )}
+
             <textarea
               value={editingPrompt}
               onChange={(e) => {
@@ -797,7 +849,7 @@ export default function PublisherSAEPage() {
                 <button
                   type="button"
                   onClick={handleSavePrompt}
-                  disabled={savingPrompt || !promptDirty || editingPrompt.trim().length < 50}
+                  disabled={savingPrompt || !promptDirty || promptMismatch || editingPrompt.trim().length < 50}
                   className="rounded-md bg-blue-600 px-4 py-2 text-sm font-semibold text-white hover:bg-blue-700 disabled:opacity-60 disabled:cursor-not-allowed transition-colors"
                 >
                   {savingPrompt ? "Saving…" : "Save Prompt"}
