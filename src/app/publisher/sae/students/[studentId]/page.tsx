@@ -3,6 +3,7 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import { useParams, useRouter } from "next/navigation";
 import SAEPdfViewer from "@/components/sae/SAEPdfViewer";
+import { describeReferencesUsed } from "@/lib/sae-references";
 import {
   fetchPublisherStudentFile,
   getStudentDetail,
@@ -303,9 +304,13 @@ function FeedbackPanel({
               </p>
               <span className="text-xs text-slate-400">{promptExpanded ? "▲ hide" : "▼ show"}</span>
             </button>
-            <p className="px-4 pb-3 text-xs text-slate-600">
-              Reference materials: {detail.include_reference_files ? "On" : "Off"}
-            </p>
+            <div className="px-4 pb-3 text-xs text-slate-600">
+              {describeReferencesUsed(
+                (rj?.details as Record<string, unknown> | undefined)?.reference_files_used,
+              ).map((line, i) => (
+                <p key={i}>{line}</p>
+              ))}
+            </div>
             {promptExpanded && (
               <div className="border-t border-slate-200 px-4 pb-4 pt-3">
                 <pre className="whitespace-pre-wrap text-xs text-slate-700 font-mono leading-relaxed max-h-64 overflow-y-auto">
