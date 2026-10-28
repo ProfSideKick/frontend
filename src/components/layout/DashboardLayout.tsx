@@ -10,7 +10,7 @@ import {
   LayoutDashboard, Users, BarChart2, LogOut, Bot,
   UserCircle, Store, Bookmark, History, BookOpen,
   Layers, ShieldCheck, Star, Menu, X, PanelLeftOpen,
-  Sun, Moon, CreditCard, Wallet, ClipboardList
+  Sun, Moon, CreditCard, Wallet, ClipboardList, Library
 } from 'lucide-react';
 
 // ─── nav item types ──────────────────────────────────────────────────────────
@@ -48,6 +48,7 @@ export const publisherNav: SidebarConfig = [
     label: 'Assessments',
     items: [
       { label: 'Self Assessment Exam', href: '/publisher/sae', icon: <ClipboardList size={18} /> },
+      { label: 'Reference Library', href: '/publisher/sae/library', icon: <Library size={18} /> },
     ],
   },
   {
@@ -160,8 +161,13 @@ function Sidebar({ nav, open, onClose, focusMode }: SidebarProps) {
   const router = useRouter();
   const { user, logout } = useAuth();
 
-  const isActive = (href: string) =>
+  const matches = (href: string) =>
     pathname === href || (href !== '/dashboard' && pathname.startsWith(href));
+  // When nested items both match (e.g. /publisher/sae and /publisher/sae/library),
+  // only the most specific one is highlighted.
+  const allHrefs = nav.flatMap((entry) => ('items' in entry ? entry.items : [entry]).map((i) => i.href));
+  const isActive = (href: string) =>
+    matches(href) && !allHrefs.some((other) => other.length > href.length && other.startsWith(href) && matches(other));
 
   const handleLogout = async () => {
     await logout();
