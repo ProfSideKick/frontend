@@ -151,7 +151,7 @@ export async function linkAvatarToAssessment(
 
 /** Update the grading prompt snapshot for an assessment.
  *  Pass null to reset to the system default Math prompt.
- *  includeReferenceFiles toggles the built-in precalculus reference PDFs and
+ *  includeReferenceFiles toggles the built-in Math Placement Exam reference PDFs and
  *  includeCustomReferenceFiles the assessment's assigned library files;
  *  omit either to leave that setting unchanged. */
 export async function updateAssessmentPrompt(
