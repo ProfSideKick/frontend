@@ -16,6 +16,8 @@ import {
 import type { SAEAssessmentRow, SAEStudentRow } from "@/types/sae";
 import { useGradingJobs } from "@/contexts/GradingJobsContext";
 import ActiveGradingJobs from "@/components/sae/ActiveGradingJobs";
+import ReferenceMaterialsPanel from "@/components/sae/ReferenceMaterialsPanel";
+import { checkPromptAgainstReferences, referencesBadgeText } from "@/lib/sae-references";
 // SAE-only: avatar linking in assessments disabled — no avatar-prompt-resolution
 // subsystem exists in this codebase (grading_prompt_snapshot is always a plain
 // publisher-edited text field). Restore avatar linking only alongside that subsystem.
@@ -105,12 +107,17 @@ export default function PublisherSAEPage() {
   const [promptError, setPromptError] = useState("");
   const [loadingDefaultPrompt, setLoadingDefaultPrompt] = useState(false);
   const [includeRefs, setIncludeRefs] = useState(true);
+  const [includeCustomRefs, setIncludeCustomRefs] = useState(true);
 
   const selectedAssessment = assessments.find((a) => a.id === selectedAssessmentId);
-  // The system default prompt describes the five-PDF reference setup; flag it
-  // when the reference files are turned off so the professor replaces it.
-  const promptMismatch =
-    !includeRefs && /receive five PDFs|Static Reference Context/i.test(editingPrompt);
+  // The system default prompt describes the five-PDF precalc setup; check it
+  // against what this assessment will actually send.
+  const promptCheck = checkPromptAgainstReferences(
+    editingPrompt,
+    includeRefs,
+    includeCustomRefs,
+    selectedAssessment?.reference_assignments ?? [],
+  );
 
   function toast(text: string, kind: "success" | "error" = "success") {
     const id = ++toastCounter.current;
@@ -276,6 +283,7 @@ export default function PublisherSAEPage() {
     setPromptError("");
     setPromptDirty(false);
     setIncludeRefs(assessment.include_reference_files ?? true);
+    setIncludeCustomRefs(assessment.include_custom_reference_files ?? true);
     if (assessment.grading_prompt_snapshot) {
       setEditingPrompt(assessment.grading_prompt_snapshot);
       setShowEditPrompt(true);
@@ -321,7 +329,9 @@ export default function PublisherSAEPage() {
     setSavingPrompt(true);
     setPromptError("");
     try {
-      const updated = await updateAssessmentPrompt(selectedAssessmentId, editingPrompt, includeRefs);
+      const updated = await updateAssessmentPrompt(
+        selectedAssessmentId, editingPrompt, includeRefs, includeCustomRefs,
+      );
       setAssessments((prev) => prev.map((a) => (a.id === updated.id ? updated : a)));
       setPromptDirty(false);
       setShowEditPrompt(false);
@@ -471,14 +481,14 @@ export default function PublisherSAEPage() {
           </button>
           {selectedAssessment && (
             <span
-              title="Whether grading includes the built-in precalculus rubric and graded solutions"
+              title="Reference materials sent to the AI with every submission"
               className={`rounded-full px-2.5 py-1 text-xs font-medium whitespace-nowrap ${
-                selectedAssessment.include_reference_files
-                  ? "bg-blue-50 text-blue-700"
-                  : "bg-slate-100 text-slate-600"
+                referencesBadgeText(selectedAssessment) === "References: None"
+                  ? "bg-slate-100 text-slate-600"
+                  : "bg-blue-50 text-blue-700"
               }`}
             >
-              Precalc references: {selectedAssessment.include_reference_files ? "On" : "Off"}
+              {referencesBadgeText(selectedAssessment)}
             </span>
           )}
         </div>
@@ -763,99 +773,104 @@ export default function PublisherSAEPage() {
       )}
 
       {/* ── Edit Grading Prompt modal ─────────────────────────────────────── */}
-      {showEditPrompt && selectedAssessmentId && (
+      {showEditPrompt && selectedAssessmentId && selectedAssessment && (
         <Modal
-          title={`Grading Prompt — ${assessments.find((a) => a.id === selectedAssessmentId)?.name ?? ""}`}
+          title={`Grading Prompt — ${selectedAssessment.name}`}
           onClose={closeEditPromptModal}
-          wide
+          extraWide
         >
-          <div className="space-y-3">
-            <p className="text-sm text-slate-600">
-              This prompt is sent to the AI for every submission graded under this assessment.
-              Edits take effect on the next submission — past grades are not changed.
-            </p>
+          <div className="grid gap-6 md:grid-cols-[minmax(0,3fr)_minmax(0,2fr)]">
+            <div className="space-y-3">
+              <p className="text-sm text-slate-600">
+                This prompt is sent to the AI for every submission graded under this assessment.
+                Edits take effect on the next submission — past grades are not changed.
+              </p>
 
-            <label className="flex items-start gap-3 rounded-md border border-slate-200 bg-slate-50 px-3 py-2.5">
-              <input
-                type="checkbox"
-                checked={includeRefs}
+              {promptCheck.block && (
+                <p className="rounded-md border border-amber-300 bg-amber-50 px-3 py-2 text-sm text-amber-900">
+                  {promptCheck.block}
+                </p>
+              )}
+              {promptCheck.warn && (
+                <p className="rounded-md border border-amber-200 bg-amber-50 px-3 py-2 text-sm text-amber-800">
+                  {promptCheck.warn}
+                </p>
+              )}
+              {promptCheck.note && (
+                <p className="rounded-md border border-slate-200 bg-slate-50 px-3 py-2 text-xs text-slate-600">
+                  {promptCheck.note}
+                </p>
+              )}
+
+              <textarea
+                value={editingPrompt}
                 onChange={(e) => {
-                  setIncludeRefs(e.target.checked);
+                  setEditingPrompt(e.target.value);
                   setPromptDirty(true);
                 }}
-                className="mt-0.5 h-4 w-4 rounded border-slate-300 text-blue-600 focus:ring-blue-500"
+                rows={20}
+                spellCheck={false}
+                className="w-full rounded-md border border-slate-300 px-3 py-2 font-mono text-xs leading-relaxed focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500 resize-y"
               />
-              <span className="text-sm">
-                <span className="font-medium text-slate-800">
-                  Use built-in precalculus reference materials
-                </span>{" "}
-                <span className="text-slate-600">
-                  (sample rubric, graded WebAssign, graded handwritten solution)
-                </span>
-                <span className="mt-1 block text-xs text-slate-500">
-                  Turn this off for any assessment that isn&apos;t the precalculus placement exam.
-                  When off, the AI only sees the student&apos;s two PDFs and your prompt, so your
-                  prompt should contain the questions&apos; solutions, point values and grading rules.
-                </span>
-              </span>
-            </label>
 
-            {promptMismatch && (
-              <p className="rounded-md border border-amber-200 bg-amber-50 px-3 py-2 text-sm text-amber-800">
-                This prompt still refers to the reference PDFs. Replace it with your own grading
-                instructions before saving.
+              <p className="text-right text-xs text-slate-400">
+                {editingPrompt.length.toLocaleString()} characters
               </p>
-            )}
 
-            <textarea
-              value={editingPrompt}
-              onChange={(e) => {
-                setEditingPrompt(e.target.value);
-                setPromptDirty(true);
-              }}
-              rows={20}
-              spellCheck={false}
-              className="w-full rounded-md border border-slate-300 px-3 py-2 font-mono text-xs leading-relaxed focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500 resize-y"
-            />
+              {promptError && (
+                <p className="rounded-md border border-red-200 bg-red-50 px-3 py-2 text-sm text-red-700">
+                  {promptError}
+                </p>
+              )}
 
-            <p className="text-right text-xs text-slate-400">
-              {editingPrompt.length.toLocaleString()} characters
-            </p>
-
-            {promptError && (
-              <p className="rounded-md border border-red-200 bg-red-50 px-3 py-2 text-sm text-red-700">
-                {promptError}
-              </p>
-            )}
-
-            <div className="flex items-center justify-between gap-3 pt-1">
-              <button
-                type="button"
-                onClick={handleResetPromptToDefault}
-                disabled={loadingDefaultPrompt || savingPrompt}
-                className="rounded-md border border-slate-300 px-3 py-2 text-sm text-slate-600 hover:bg-slate-50 disabled:opacity-50 disabled:cursor-not-allowed whitespace-nowrap transition-colors"
-              >
-                {loadingDefaultPrompt ? "Loading…" : "Reset to default"}
-              </button>
-              <div className="flex gap-3">
+              <div className="flex items-center justify-between gap-3 pt-1">
                 <button
                   type="button"
-                  onClick={closeEditPromptModal}
-                  disabled={savingPrompt}
-                  className="rounded-md border border-slate-300 px-4 py-2 text-sm text-slate-600 hover:bg-slate-50 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
+                  onClick={handleResetPromptToDefault}
+                  disabled={loadingDefaultPrompt || savingPrompt}
+                  className="rounded-md border border-slate-300 px-3 py-2 text-sm text-slate-600 hover:bg-slate-50 disabled:opacity-50 disabled:cursor-not-allowed whitespace-nowrap transition-colors"
                 >
-                  Cancel
+                  {loadingDefaultPrompt ? "Loading…" : "Reset to default"}
                 </button>
-                <button
-                  type="button"
-                  onClick={handleSavePrompt}
-                  disabled={savingPrompt || !promptDirty || promptMismatch || editingPrompt.trim().length < 50}
-                  className="rounded-md bg-blue-600 px-4 py-2 text-sm font-semibold text-white hover:bg-blue-700 disabled:opacity-60 disabled:cursor-not-allowed transition-colors"
-                >
-                  {savingPrompt ? "Saving…" : "Save Prompt"}
-                </button>
+                <div className="flex gap-3">
+                  <button
+                    type="button"
+                    onClick={closeEditPromptModal}
+                    disabled={savingPrompt}
+                    className="rounded-md border border-slate-300 px-4 py-2 text-sm text-slate-600 hover:bg-slate-50 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
+                  >
+                    Cancel
+                  </button>
+                  <button
+                    type="button"
+                    onClick={handleSavePrompt}
+                    disabled={savingPrompt || !promptDirty || !!promptCheck.block || editingPrompt.trim().length < 50}
+                    className="rounded-md bg-blue-600 px-4 py-2 text-sm font-semibold text-white hover:bg-blue-700 disabled:opacity-60 disabled:cursor-not-allowed transition-colors"
+                  >
+                    {savingPrompt ? "Saving…" : "Save Prompt"}
+                  </button>
+                </div>
               </div>
             </div>
+
+            <ReferenceMaterialsPanel
+              assessment={selectedAssessment}
+              includeRefs={includeRefs}
+              onIncludeRefsChange={(v) => {
+                setIncludeRefs(v);
+                setPromptDirty(true);
+              }}
+              includeCustomRefs={includeCustomRefs}
+              onIncludeCustomRefsChange={(v) => {
+                setIncludeCustomRefs(v);
+                setPromptDirty(true);
+              }}
+              onAssessmentUpdated={(row) =>
+                setAssessments((prev) => prev.map((a) => (a.id === row.id ? row : a)))
+              }
+              onError={(m) => toast(m, "error")}
+              onNotice={(m) => toast(m)}
+            />
           </div>
         </Modal>
       )}
@@ -902,23 +917,27 @@ function Modal({
   onClose,
   children,
   wide = false,
+  extraWide = false,
 }: {
   title: string;
   onClose: () => void;
   children: React.ReactNode;
   wide?: boolean;
+  extraWide?: boolean;
 }) {
   return (
     <div
       className="fixed inset-0 z-40 flex items-center justify-center bg-black/40 px-4"
       onClick={(e) => e.target === e.currentTarget && onClose()}
     >
-      <div className={`relative rounded-xl bg-white shadow-xl w-full ${wide ? "max-w-2xl" : "max-w-md"}`}>
+      <div className={`relative rounded-xl bg-white shadow-xl w-full ${
+        extraWide ? "max-w-5xl" : wide ? "max-w-2xl" : "max-w-md"
+      }`}>
         <div className="flex items-center justify-between border-b px-6 py-4">
           <h2 className="text-base font-semibold text-slate-900">{title}</h2>
           <button onClick={onClose} className="text-slate-400 hover:text-slate-600 text-xl leading-none">×</button>
         </div>
-        <div className="px-6 py-5">{children}</div>
+        <div className={`px-6 py-5 ${extraWide ? "max-h-[85vh] overflow-y-auto" : ""}`}>{children}</div>
       </div>
     </div>
   );
