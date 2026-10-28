@@ -10,8 +10,66 @@ export interface SAEAssessmentRow {
   is_active: boolean;
   grading_prompt_snapshot: string | null;
   include_reference_files: boolean;
+  include_custom_reference_files: boolean;
+  reference_assignments: SAEReferenceAssignment[];
   avatar_id: string | null;
   created_at: string;
+}
+
+// ── Reference library (professor-owned grading materials) ─────────────────────
+
+export type SAEReferenceKind = "rubric" | "answer_key" | "worked_solution" | "other";
+
+/** One version of a PDF in the professor's library. */
+export interface SAELibraryFile {
+  id: string;
+  lineage_id: string;
+  version: number;
+  kind: SAEReferenceKind;
+  label: string | null;
+  filename: string;
+  size_bytes: number;
+  created_at: string;
+}
+
+export interface SAEReferenceSet {
+  id: string;
+  name: string;
+  description: string | null;
+  files: SAELibraryFile[];
+  created_at: string;
+}
+
+/** A library version pinned to an assessment; kind/label/filename are the copy made when assigned. */
+export interface SAEReferenceAssignment {
+  id: string;
+  file_id: string;
+  lineage_id: string;
+  version: number;
+  kind: SAEReferenceKind;
+  label: string | null;
+  filename: string;
+  size_bytes: number;
+  sort_order: number;
+  source_set_id: string | null;
+  assigned_at: string;
+  newer_version_available: boolean;
+  removed_from_library: boolean;
+}
+
+/** result_json.details.reference_files_used — older submissions stored a plain boolean. */
+export interface SAEReferenceFilesUsed {
+  default_set: boolean;
+  custom_set_enabled: boolean;
+  custom: {
+    file_id: string;
+    lineage_id: string;
+    version: number;
+    kind: SAEReferenceKind;
+    label: string | null;
+    filename: string;
+    source_set_id: string | null;
+  }[];
 }
 
 export interface SAEStudentRow {
@@ -75,6 +133,8 @@ export interface SAEStudentDetail extends SAEStudentRow {
   submissions: SAESubmissionResultPublisher[];
   grading_prompt_snapshot: string | null;
   include_reference_files: boolean;
+  include_custom_reference_files: boolean;
+  reference_assignments: SAEReferenceAssignment[];
 }
 
 /**
