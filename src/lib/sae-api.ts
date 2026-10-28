@@ -9,6 +9,9 @@ import type {
   SAEAdminStudentRow,
   SAEAssessmentRow,
   SAEBatchCreateResponse,
+  SAELibraryFile,
+  SAEReferenceKind,
+  SAEReferenceSet,
   SAERegenerateResponse,
   SAESetupResponse,
   SAEStudentDetail,
@@ -33,18 +36,50 @@ export function authHeaders(): HeadersInit {
   };
 }
 
-async function handleResponse<T>(res: Response): Promise<T> {
-  if (!res.ok) {
-    let detail = `HTTP ${res.status}`;
-    try {
-      const body = await res.json();
-      detail = body.detail ?? body.message ?? detail;
-    } catch {
-      // ignore parse errors
-    }
-    throw new Error(detail);
+/**
+ * Error thrown for a failed API call. Reference-library endpoints return a
+ * structured error ({ code, message, existing_id? }); `code` and `existingId`
+ * carry it so the UI can react (e.g. offer the existing file on a duplicate).
+ */
+export class SAEApiError extends Error {
+  constructor(
+    message: string,
+    public status: number,
+    public code?: string,
+    public existingId?: string,
+  ) {
+    super(message);
+    this.name = "SAEApiError";
   }
+}
+
+async function apiError(res: Response): Promise<SAEApiError> {
+  let detail: unknown = `HTTP ${res.status}`;
+  try {
+    const body = await res.json();
+    detail = body.detail ?? body.message ?? detail;
+  } catch {
+    // ignore parse errors
+  }
+  if (Array.isArray(detail)) {
+    // FastAPI request-validation errors: [{ msg, loc, ... }, ...]
+    const msgs = detail.map((d) => (d && typeof d === "object" && "msg" in d ? String(d.msg) : String(d)));
+    return new SAEApiError(msgs.join("; ") || `HTTP ${res.status}`, res.status, "validation_error");
+  }
+  if (detail && typeof detail === "object") {
+    const d = detail as { code?: string; message?: string; existing_id?: string };
+    return new SAEApiError(d.message ?? `HTTP ${res.status}`, res.status, d.code, d.existing_id);
+  }
+  return new SAEApiError(String(detail), res.status);
+}
+
+async function handleResponse<T>(res: Response): Promise<T> {
+  if (!res.ok) throw await apiError(res);
   return res.json() as Promise<T>;
+}
+
+async function handleNoContent(res: Response): Promise<void> {
+  if (!res.ok) throw await apiError(res);
 }
 
 // ── Public (no auth) ──────────────────────────────────────────────────────────
@@ -116,12 +151,14 @@ export async function linkAvatarToAssessment(
 
 /** Update the grading prompt snapshot for an assessment.
  *  Pass null to reset to the system default Math prompt.
- *  includeReferenceFiles toggles the built-in precalculus reference PDFs;
- *  omit it to leave the setting unchanged. */
+ *  includeReferenceFiles toggles the built-in precalculus reference PDFs and
+ *  includeCustomReferenceFiles the assessment's assigned library files;
+ *  omit either to leave that setting unchanged. */
 export async function updateAssessmentPrompt(
   assessmentId: string,
   gradingPrompt: string | null,
   includeReferenceFiles?: boolean,
+  includeCustomReferenceFiles?: boolean,
 ): Promise<SAEAssessmentRow> {
   const res = await fetch(
     `${API}/api/sae/publisher/assessments/${assessmentId}/prompt`,
@@ -131,8 +168,154 @@ export async function updateAssessmentPrompt(
       body: JSON.stringify({
         grading_prompt: gradingPrompt,
         ...(includeReferenceFiles !== undefined && { include_reference_files: includeReferenceFiles }),
+        ...(includeCustomReferenceFiles !== undefined && {
+          include_custom_reference_files: includeCustomReferenceFiles,
+        }),
       }),
     }
+  );
+  return handleResponse<SAEAssessmentRow>(res);
+}
+
+// ── Reference library (professor-owned) ───────────────────────────────────────
+
+const LIBRARY = `${API}/api/sae/publisher/reference-library`;
+
+/** Latest version of each file in the caller's library. */
+export async function listLibraryFiles(): Promise<SAELibraryFile[]> {
+  const res = await fetch(`${LIBRARY}/files`, { headers: authHeaders() });
+  return handleResponse<SAELibraryFile[]>(res);
+}
+
+/** Add a PDF to the library. It is not assigned to any assessment. */
+export async function uploadLibraryFile(
+  file: File,
+  kind: SAEReferenceKind,
+  label?: string,
+): Promise<SAELibraryFile> {
+  const form = new FormData();
+  form.append("file", file);
+  form.append("kind", kind);
+  if (label?.trim()) form.append("label", label.trim());
+  const res = await fetch(`${LIBRARY}/files`, { method: "POST", headers: authHeaders(), body: form });
+  return handleResponse<SAELibraryFile>(res);
+}
+
+/** Upload a new version. Sets move to it; assessments keep their version until updated. */
+export async function uploadLibraryFileVersion(fileId: string, file: File): Promise<SAELibraryFile> {
+  const form = new FormData();
+  form.append("file", file);
+  const res = await fetch(`${LIBRARY}/files/${fileId}/versions`, {
+    method: "POST",
+    headers: authHeaders(),
+    body: form,
+  });
+  return handleResponse<SAELibraryFile>(res);
+}
+
+export async function updateLibraryFile(
+  fileId: string,
+  changes: { kind?: SAEReferenceKind; label?: string },
+): Promise<SAELibraryFile> {
+  const res = await fetch(`${LIBRARY}/files/${fileId}`, {
+    method: "PATCH",
+    headers: { "Content-Type": "application/json", ...authHeaders() },
+    body: JSON.stringify(changes),
+  });
+  return handleResponse<SAELibraryFile>(res);
+}
+
+/** Remove a file (all versions) from the library. Assessments using it keep it. */
+export async function deleteLibraryFile(fileId: string): Promise<void> {
+  const res = await fetch(`${LIBRARY}/files/${fileId}`, { method: "DELETE", headers: authHeaders() });
+  return handleNoContent(res);
+}
+
+/** Download one of the caller's file versions (also works for versions removed from the library). */
+export async function fetchLibraryFile(fileId: string): Promise<ArrayBuffer> {
+  const res = await fetch(`${LIBRARY}/files/${fileId}/download`, { headers: authHeaders() });
+  if (!res.ok) throw await apiError(res);
+  return res.arrayBuffer();
+}
+
+export async function listReferenceSets(): Promise<SAEReferenceSet[]> {
+  const res = await fetch(`${LIBRARY}/sets`, { headers: authHeaders() });
+  return handleResponse<SAEReferenceSet[]>(res);
+}
+
+export async function createReferenceSet(name: string, description?: string): Promise<SAEReferenceSet> {
+  const res = await fetch(`${LIBRARY}/sets`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json", ...authHeaders() },
+    body: JSON.stringify({ name, description: description ?? null }),
+  });
+  return handleResponse<SAEReferenceSet>(res);
+}
+
+export async function updateReferenceSet(
+  setId: string,
+  changes: { name?: string; description?: string },
+): Promise<SAEReferenceSet> {
+  const res = await fetch(`${LIBRARY}/sets/${setId}`, {
+    method: "PATCH",
+    headers: { "Content-Type": "application/json", ...authHeaders() },
+    body: JSON.stringify(changes),
+  });
+  return handleResponse<SAEReferenceSet>(res);
+}
+
+/** Replace a set's files, in order. */
+export async function setReferenceSetFiles(setId: string, fileIds: string[]): Promise<SAEReferenceSet> {
+  const res = await fetch(`${LIBRARY}/sets/${setId}/files`, {
+    method: "PUT",
+    headers: { "Content-Type": "application/json", ...authHeaders() },
+    body: JSON.stringify({ file_ids: fileIds }),
+  });
+  return handleResponse<SAEReferenceSet>(res);
+}
+
+export async function deleteReferenceSet(setId: string): Promise<void> {
+  const res = await fetch(`${LIBRARY}/sets/${setId}`, { method: "DELETE", headers: authHeaders() });
+  return handleNoContent(res);
+}
+
+// ── Assessment reference assignments ──────────────────────────────────────────
+
+/** Explicitly assign library files and/or a whole set; each pins its current version. */
+export async function assignReferenceFiles(
+  assessmentId: string,
+  selection: { fileIds?: string[]; setId?: string },
+): Promise<SAEAssessmentRow> {
+  const res = await fetch(`${API}/api/sae/publisher/assessments/${assessmentId}/reference-assignments`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json", ...authHeaders() },
+    body: JSON.stringify({
+      file_ids: selection.fileIds ?? [],
+      ...(selection.setId && { set_id: selection.setId }),
+    }),
+  });
+  return handleResponse<SAEAssessmentRow>(res);
+}
+
+export async function unassignReferenceFile(
+  assessmentId: string,
+  assignmentId: string,
+): Promise<SAEAssessmentRow> {
+  const res = await fetch(
+    `${API}/api/sae/publisher/assessments/${assessmentId}/reference-assignments/${assignmentId}`,
+    { method: "DELETE", headers: authHeaders() },
+  );
+  return handleResponse<SAEAssessmentRow>(res);
+}
+
+/** Move one assignment to the newest version of its file (never automatic). */
+export async function updateReferenceAssignmentVersion(
+  assessmentId: string,
+  assignmentId: string,
+): Promise<SAEAssessmentRow> {
+  const res = await fetch(
+    `${API}/api/sae/publisher/assessments/${assessmentId}/reference-assignments/${assignmentId}/update-version`,
+    { method: "POST", headers: authHeaders() },
   );
   return handleResponse<SAEAssessmentRow>(res);
 }
