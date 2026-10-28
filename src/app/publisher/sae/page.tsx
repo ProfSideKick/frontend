@@ -110,7 +110,7 @@ export default function PublisherSAEPage() {
   const [includeCustomRefs, setIncludeCustomRefs] = useState(true);
 
   const selectedAssessment = assessments.find((a) => a.id === selectedAssessmentId);
-  // The system default prompt describes the five-PDF precalc setup; check it
+  // The system default prompt describes the five-PDF Math Placement Exam setup; check it
   // against what this assessment will actually send.
   const promptCheck = checkPromptAgainstReferences(
     editingPrompt,
