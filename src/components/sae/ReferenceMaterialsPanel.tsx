@@ -152,18 +152,18 @@ export default function ReferenceMaterialsPanel({
         <p className="text-xs text-slate-500">Files sent to the AI with every submission.</p>
       </div>
 
-      {/* Built-in precalc set */}
+      {/* Built-in Math Placement Exam set */}
       <section className="rounded-md border border-slate-200 p-3">
         <div className="flex items-center justify-between gap-3">
-          <p className="font-medium text-slate-800">Built-in set: Precalculus placement</p>
-          <Switch checked={includeRefs} onChange={onIncludeRefsChange} label="Use built-in precalc references" />
+          <p className="font-medium text-slate-800">Built-in set: Math Placement Exam</p>
+          <Switch checked={includeRefs} onChange={onIncludeRefsChange} label="Use built-in Math Placement Exam references" />
         </div>
         <ul className={`mt-2 space-y-0.5 text-xs ${includeRefs ? "text-slate-600" : "text-slate-400 line-through"}`}>
           {BUILT_IN_FILES.map((f) => (
             <li key={f}>• {f} <span className="text-slate-400">(built-in)</span></li>
           ))}
         </ul>
-        <p className="mt-1 text-xs text-slate-500">Turn this off for any assessment that isn&apos;t the precalculus placement exam.</p>
+        <p className="mt-1 text-xs text-slate-500">Turn this off for any assessment that isn&apos;t the Math Placement Exam.</p>
       </section>
 
       {/* Assigned reference files */}
