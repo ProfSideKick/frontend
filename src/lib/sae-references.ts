@@ -1,5 +1,5 @@
 /**
- * Display rules for assessment reference materials (built-in precalc set +
+ * Display rules for assessment reference materials (built-in Math Placement Exam set +
  * professor-assigned library files). Pure functions, shared by the publisher
  * pages and the reference library.
  */
@@ -43,12 +43,12 @@ export function referencesBadgeText(
 ): string {
   const n = a.reference_assignments?.length ?? 0;
   const parts: string[] = [];
-  if (a.include_reference_files) parts.push("Precalc");
+  if (a.include_reference_files) parts.push("Math Placement Exam");
   if (n > 0) parts.push(a.include_custom_reference_files ? files(n) : `${files(n)} (off)`);
   return `References: ${parts.length ? parts.join(" + ") : "None"}`;
 }
 
-// The system default prompt describes the five-PDF precalc setup.
+// The system default prompt describes the five-PDF Math Placement Exam setup.
 export function isDefaultStylePrompt(prompt: string): boolean {
   return /receive five PDFs|Static Reference Context/i.test(prompt);
 }
@@ -75,11 +75,11 @@ export function checkPromptAgainstReferences(
 
   if (!includeBuiltIn && defaultStyle) {
     result.block =
-      "This prompt still refers to the built-in precalc reference PDFs, which are turned off. " +
+      "This prompt still refers to the built-in Math Placement Exam reference PDFs, which are turned off. " +
       "Replace it with your own grading instructions before saving.";
   } else if (customSent && defaultStyle) {
     result.warn =
-      "Your prompt describes the five precalc PDFs. Update it to refer to your assigned reference files.";
+      "Your prompt describes the five Math Placement Exam PDFs. Update it to refer to your assigned reference files.";
   }
   if (!includeBuiltIn && !customSent) {
     result.note =
@@ -98,7 +98,7 @@ export function describeReferencesUsed(raw: unknown): string[] {
     return ["Reference materials: not recorded for this submission"];
   }
   const used = raw as SAEReferenceFilesUsed;
-  const lines = [`Built-in precalc references: ${used.default_set ? "On" : "Off"}`];
+  const lines = [`Built-in Math Placement Exam references: ${used.default_set ? "On" : "Off"}`];
   const custom = used.custom ?? [];
   if (!used.custom_set_enabled) {
     lines.push("Assigned reference files: Off");
