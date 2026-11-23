@@ -37,12 +37,21 @@ function CollapsibleSection({ title, isOpen, onToggle, children }: CollapsibleSe
 interface AISettingsProps {
   sessionId: string;
   onClose: () => void;
+  /** Called after a successful save, once the popup has closed (the page re-fetches the session) */
+  onSaved?: () => void;
 }
 
-export default function AISettings({ sessionId, onClose }: AISettingsProps) {
+// Realtime voice models a professor can pick; must match APPROVED_REALTIME_MODELS in the backend
+const REALTIME_MODEL_OPTIONS = [
+  { value: "gpt-realtime-2.1", label: "GPT Realtime 2.1 (default)" },
+  { value: "gpt-realtime-2.1-mini", label: "GPT Realtime 2.1 Mini" },
+];
+const DEFAULT_REALTIME_MODEL = "gpt-realtime-2.1";
+
+export default function AISettings({ sessionId, onClose, onSaved }: AISettingsProps) {
   const { token } = useAuth();
   const [settings, setSettings] = useState({
-    model: "gpt-realtime-2.1", // informational; backend uses OPENAI_REALTIME_MODEL
+    model: DEFAULT_REALTIME_MODEL,
     voice: "alloy",
     temperature: 0.8,
     instructions: "",
@@ -146,6 +155,10 @@ export default function AISettings({ sessionId, onClose }: AISettingsProps) {
           
           setSettings({
             ...params,
+            // Old sessions may store retired model names; show (and save) the default instead
+            model: REALTIME_MODEL_OPTIONS.some((o) => o.value === params.model)
+              ? params.model
+              : DEFAULT_REALTIME_MODEL,
             user_instructions: userInstructions,
             core_instructions: coreInstructions
           });
@@ -260,9 +273,11 @@ export default function AISettings({ sessionId, onClose }: AISettingsProps) {
       // Show success message
       setSuccess('AI settings updated successfully!');
       
-      // Close modal after a short delay to show the success message
+      // Close modal after a short delay to show the success message, then let the
+      // page reload the session so Start Teaching uses the saved settings
       setTimeout(() => {
         onClose();
+        onSaved?.();
       }, 1500);
     } catch (error) {
       console.error('Error updating AI settings:', error);
@@ -294,12 +309,17 @@ export default function AISettings({ sessionId, onClose }: AISettingsProps) {
             
             <div>
               <label htmlFor="model" className="block text-sm font-medium text-gray-700 mb-1">AI Model</label>
-              <input
-                type="text"
-                value="Set on the server (default: GPT Realtime 2.1)"
-                readOnly
-                className="w-full p-2 border border-gray-200 bg-gray-50 rounded-lg text-gray-600"
-              />
+              <select
+                data-path="model"
+                id="model"
+                value={settings.model}
+                onChange={handleInputChange}
+                className="w-full p-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+              >
+                {REALTIME_MODEL_OPTIONS.map((o) => (
+                  <option key={o.value} value={o.value}>{o.label}</option>
+                ))}
+              </select>
             </div>
 
             <div>

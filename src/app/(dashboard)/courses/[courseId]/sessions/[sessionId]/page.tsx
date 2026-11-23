@@ -51,6 +51,8 @@ export default function SessionDetailsPage() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [showAISettings, setShowAISettings] = useState(false);
+  // Bumped after AI Settings are saved, to re-fetch the session so Start Teaching uses the new settings
+  const [reloadKey, setReloadKey] = useState(0);
   const [startingTeaching, setStartingTeaching] = useState(false);
   const [linkCopied, setLinkCopied] = useState(false);
   const { user } = useAuth();
@@ -118,7 +120,7 @@ export default function SessionDetailsPage() {
     };
     
     fetchSessionDetails();
-  }, [sessionId, getToken, isSharedLink]);
+  }, [sessionId, getToken, isSharedLink, reloadKey]);
 
   const copySessionId = async () => {
     try {
@@ -254,7 +256,7 @@ export default function SessionDetailsPage() {
             
             <button
               onClick={handleStartTeaching}
-              disabled={startingTeaching}
+              disabled={startingTeaching || loading}
               className="flex items-center space-x-2 px-6 py-3 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
             >
               {startingTeaching ? (
@@ -395,7 +397,7 @@ export default function SessionDetailsPage() {
                 <div className="space-y-3">
                   <button
                     onClick={handleStartTeaching}
-                    disabled={startingTeaching}
+                    disabled={startingTeaching || loading}
                     className="w-full flex items-center justify-center gap-2 px-4 py-3 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors disabled:opacity-50"
                   >
                     <Play className="w-4 h-4" />
@@ -480,6 +482,7 @@ export default function SessionDetailsPage() {
           sessionId={sessionId}
         //   initialSettings={sessionDetails.assistantParameters || {}}
           onClose={() => setShowAISettings(false)}
+          onSaved={() => setReloadKey((k) => k + 1)}
         //   onSave={(settings) => {
         //     // Update session details with new settings
         //     setSessionDetails({
