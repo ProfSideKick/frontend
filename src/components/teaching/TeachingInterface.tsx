@@ -433,11 +433,20 @@ export default function TeachingInterface({ classSession, onEndSession, sessionR
       const response = await fetch(url.toString());
       
       if (!response.ok) {
-        throw new Error(`HTTP error! status: ${response.status}`);
+        // Backend returns { detail: { error, openai_status, message } } for OpenAI failures
+        let detail = "";
+        try {
+          const body = await response.json();
+          detail = typeof body?.detail === "string" ? body.detail : body?.detail?.message || "";
+        } catch {
+          /* non-JSON error body */
+        }
+        throw new Error(`Could not start voice session (HTTP ${response.status})${detail ? `: ${detail}` : ""}`);
       }
       
       const data = await response.json();
-      return data.client_secret.value; // Changed from .token to .value
+      // GA Realtime: token is at top-level "value" (beta used client_secret.value)
+      return data.value ?? data.client_secret?.value;
     } catch (error) {
       console.error('Failed to fetch ephemeral key:', error);
       throw error;
@@ -1239,6 +1248,7 @@ export default function TeachingInterface({ classSession, onEndSession, sessionR
     const sessionUpdate = {
       type: "session.update",
       session: {
+        type: "realtime", // required by the GA Realtime API
         tools: [
           {
             type: "function",
@@ -1449,7 +1459,8 @@ export default function TeachingInterface({ classSession, onEndSession, sessionR
     const triggerResponse = {
       type: "response.create",
       response: {
-        modalities: ["text", "audio"]
+        // GA: "modalities" became "output_modalities"; audio output still includes a transcript
+        output_modalities: ["audio"]
       }
     };
     
@@ -1734,7 +1745,12 @@ export default function TeachingInterface({ classSession, onEndSession, sessionR
       // Pass to the default handler for other events
       handleServerEventRef.current(serverEvent);
 
-      if (serverEvent.type === "response.audio_transcript.delta") {
+      // GA name is response.output_audio_transcript.delta (beta: response.audio_transcript.delta).
+      // This drives the avatar's text-based lipsync.
+      if (
+        serverEvent.type === "response.output_audio_transcript.delta" ||
+        serverEvent.type === "response.audio_transcript.delta"
+      ) {
         const raw = (serverEvent.delta || "").trim();
         // if (!raw || /^[\s.,:;!?'"-]+$/.test(raw)) return;
         // const normalized = raw.replace(/\s+/g, " ");

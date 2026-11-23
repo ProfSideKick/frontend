@@ -164,6 +164,7 @@ export function useHandleServerEvent({
         break;
       }
 
+      case "conversation.item.added": // GA name
       case "conversation.item.created": {
         let text =
           serverEvent.item?.content?.[0]?.text ||
@@ -198,6 +199,7 @@ export function useHandleServerEvent({
         break;
       }
 
+      case "response.output_audio_transcript.delta": // GA name
       case "response.audio_transcript.delta": {
         const itemId = serverEvent.item_id;
         const deltaText = serverEvent.delta || "";

@@ -308,8 +308,13 @@ export interface ApiErrorResponse {
 }
 
 export interface EphemeralTokenResponse {
-  client_secret: {
+  // GA Realtime client secret
+  value: string;
+  expires_at?: number;
+  model?: string;
+  /** @deprecated beta shape, still returned by the backend for compatibility */
+  client_secret?: {
     value: string;
-    expires_at: string;
+    expires_at?: number;
   };
 }

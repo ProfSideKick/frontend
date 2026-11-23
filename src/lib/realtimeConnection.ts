@@ -81,11 +81,12 @@ export async function createRealtimeConnection(
   const offer = await pc.createOffer();
   await pc.setLocalDescription(offer);
 
-  const baseUrl = "https://api.openai.com/v1/realtime";
-  // Use the model parameter passed to the function
-  console.log(`🤖 Using model: ${model}`);
+  // GA Realtime WebRTC endpoint. The model comes from the session baked into the
+  // ephemeral client secret, so no ?model= query param is sent.
+  const callsUrl = "https://api.openai.com/v1/realtime/calls";
+  console.log(`🤖 Using model (from client secret session): ${model}`);
 
-  const sdpResponse = await fetch(`${baseUrl}?model=${model}`, {
+  const sdpResponse = await fetch(callsUrl, {
     method: "POST",
     body: offer.sdp,
     headers: {
@@ -95,6 +96,17 @@ export async function createRealtimeConnection(
   });
 
   const answerSdp = await sdpResponse.text();
+  if (!sdpResponse.ok) {
+    mediaStream.getTracks().forEach((t) => t.stop());
+    pc.close();
+    let message = answerSdp;
+    try {
+      message = JSON.parse(answerSdp)?.error?.message || answerSdp;
+    } catch {
+      /* body was not JSON */
+    }
+    throw new Error(`OpenAI Realtime call setup failed (${sdpResponse.status}): ${message}`);
+  }
   const answer: RTCSessionDescriptionInit = {
     type: "answer",
     sdp: answerSdp,
