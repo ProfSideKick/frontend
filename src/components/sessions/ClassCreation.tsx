@@ -43,6 +43,14 @@ function CollapsibleSection({ title, isOpen, onToggle, children }: CollapsibleSe
 } 
 
 
+// Realtime voice models a professor can pick; must match APPROVED_REALTIME_MODELS in the
+// backend and REALTIME_MODEL_OPTIONS in AISettings.tsx
+const REALTIME_MODEL_OPTIONS = [
+  { value: "gpt-realtime-2.1", label: "GPT Realtime 2.1 (default)" },
+  { value: "gpt-realtime-2.1-mini", label: "GPT Realtime 2.1 Mini" },
+];
+const DEFAULT_REALTIME_MODEL = "gpt-realtime-2.1";
+
 export default function ClassCreation() {
   const router = useRouter();
   const searchParams = useSearchParams();
@@ -80,8 +88,7 @@ export default function ClassCreation() {
         model: "whisper-1",
       },
       instructions: "",
-      // Informational only: the backend uses OPENAI_REALTIME_MODEL for every session
-      model: "gpt-realtime-2.1",
+      model: DEFAULT_REALTIME_MODEL,
       output_audio_format: "pcm16",
       temperature: 0.8,
       tool_choice: "auto",
@@ -718,14 +725,19 @@ export default function ClassCreation() {
                 >
                   AI Model
                 </label>
-                {/* The backend picks the model from OPENAI_REALTIME_MODEL, so this is not selectable */}
-                <input
+                <select
+                  data-path="assistant_parameters.model"
                   id="assistant_parameters.model"
-                  type="text"
-                  value="Set on the server (default: GPT Realtime 2.1)"
-                  readOnly
-                  className="w-full p-2 border border-gray-200 bg-gray-50 rounded-lg text-gray-600"
-                />
+                  value={classDetails.assistant_parameters.model}
+                  onChange={handleInputChange}
+                  className="w-full input-style"
+                >
+                  {REALTIME_MODEL_OPTIONS.map((o) => (
+                    <option key={o.value} value={o.value}>
+                      {o.label}
+                    </option>
+                  ))}
+                </select>
               </div>
 
               <div>
