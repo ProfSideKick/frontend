@@ -445,6 +445,7 @@ export default function TeachingInterface({ classSession, onEndSession, sessionR
       }
       
       const data = await response.json();
+      if (data.model) console.log(`🎯 Realtime model chosen by server: ${data.model}`);
       // GA Realtime: token is at top-level "value" (beta used client_secret.value)
       return data.value ?? data.client_secret?.value;
     } catch (error) {

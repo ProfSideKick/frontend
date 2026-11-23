@@ -80,7 +80,8 @@ export default function ClassCreation() {
         model: "whisper-1",
       },
       instructions: "",
-      model: "gpt-4o-realtime-preview-2024-12-17",
+      // Informational only: the backend uses OPENAI_REALTIME_MODEL for every session
+      model: "gpt-realtime-2.1",
       output_audio_format: "pcm16",
       temperature: 0.8,
       tool_choice: "auto",
@@ -717,21 +718,14 @@ export default function ClassCreation() {
                 >
                   AI Model
                 </label>
-                <select
-                  data-path="assistant_parameters.model"
+                {/* The backend picks the model from OPENAI_REALTIME_MODEL, so this is not selectable */}
+                <input
                   id="assistant_parameters.model"
-                  value={classDetails.assistant_parameters.model}
-                  onChange={handleInputChange}
-                  className="w-full input-style"
-                >
-                  <option value="gpt-4o-realtime-preview-2024-12-17">
-                    GPT-4o Realtime (Recommended)
-                  </option>
-                  <option value="gpt-4o-mini-realtime-preview-2024-12-17">
-                    GPT-4o Mini Realtime
-                  </option>
-                  <option value="gpt-realtime">GPT Realtime</option>
-                </select>
+                  type="text"
+                  value="Set on the server (default: GPT Realtime 2.1)"
+                  readOnly
+                  className="w-full p-2 border border-gray-200 bg-gray-50 rounded-lg text-gray-600"
+                />
               </div>
 
               <div>

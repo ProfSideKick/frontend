@@ -42,7 +42,7 @@ interface AISettingsProps {
 export default function AISettings({ sessionId, onClose }: AISettingsProps) {
   const { token } = useAuth();
   const [settings, setSettings] = useState({
-    model: "gpt-4o-realtime",
+    model: "gpt-realtime-2.1", // informational; backend uses OPENAI_REALTIME_MODEL
     voice: "alloy",
     temperature: 0.8,
     instructions: "",
@@ -296,7 +296,7 @@ export default function AISettings({ sessionId, onClose }: AISettingsProps) {
               <label htmlFor="model" className="block text-sm font-medium text-gray-700 mb-1">AI Model</label>
               <input
                 type="text"
-                value="GPT Realtime"
+                value="Set on the server (default: GPT Realtime 2.1)"
                 readOnly
                 className="w-full p-2 border border-gray-200 bg-gray-50 rounded-lg text-gray-600"
               />
