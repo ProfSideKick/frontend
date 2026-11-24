@@ -49,9 +49,74 @@ export async function createRealtimeConnection(
   // Create a new RTCPeerConnection
   const pc = new RTCPeerConnection();
 
+  // Android-only amplification of the AI *output*, never the microphone.
+  // Native WebRTC playback remains available if Web Audio is unsupported or blocked.
+  let activeAudioContext: AudioContext | null = null;
+  const releaseAudioContext = () => {
+    const context = activeAudioContext;
+    activeAudioContext = null;
+    if (context) void context.close().catch(() => {});
+  };
+  pc.addEventListener("connectionstatechange", () => {
+    if (pc.connectionState === "closed" || pc.connectionState === "failed") {
+      releaseAudioContext();
+    }
+  });
+
   pc.ontrack = (e) => {
-    if (audioElement.current) {
-      audioElement.current.srcObject = e.streams[0];
+    const element = audioElement.current;
+    const originalStream = e.streams[0];
+    if (!element || !originalStream) return;
+
+    releaseAudioContext();
+    element.srcObject = originalStream;
+    if (!/Android/i.test(navigator.userAgent) || typeof AudioContext === "undefined") return;
+
+    let context: AudioContext | null = null;
+    try {
+      context = new AudioContext();
+      const source = context.createMediaStreamSource(originalStream);
+      const boost = context.createGain();
+      boost.gain.value = 1.8; // +5.1 dB on quiet speech before compression
+      const limiter = context.createDynamicsCompressor();
+      limiter.threshold.value = -10;
+      limiter.knee.value = 0;
+      limiter.ratio.value = 12;
+      limiter.attack.value = 0.003;
+      limiter.release.value = 0.2;
+      const outputGain = context.createGain();
+      outputGain.gain.value = 0.9; // post-compression headroom, not device volume
+      const destination = context.createMediaStreamDestination();
+      source.connect(boost);
+      boost.connect(limiter);
+      limiter.connect(outputGain);
+      outputGain.connect(destination);
+      activeAudioContext = context;
+
+      const activateBoost = () => {
+        if (activeAudioContext !== context || context?.state !== "running" ||
+            audioElement.current !== element || element.srcObject !== originalStream ||
+            pc.connectionState === "closed") return;
+        element.srcObject = destination.stream;
+        // If browser autoplay is blocked, restore native playback.
+        if (element.paused) {
+          void element.play().catch(() => {
+            if (activeAudioContext === context) {
+              if (element.srcObject === destination.stream) element.srcObject = originalStream;
+              releaseAudioContext();
+            }
+          });
+        }
+      };
+      if (context.state === "running") activateBoost();
+      else void context.resume().then(activateBoost).catch(() => {
+        if (activeAudioContext === context) releaseAudioContext();
+      });
+    } catch (error) {
+      console.warn("Android output amplification unavailable; retaining native audio", error);
+      if (context) void context.close().catch(() => {});
+      activeAudioContext = null;
+      element.srcObject = originalStream;
     }
   };
 
