@@ -12,7 +12,7 @@ on:
 jobs:
   validate:
     runs-on: ubuntu-latest
-    timeout-minutes: 15
+    timeout-minutes: 20
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-node@v4
@@ -27,5 +27,17 @@ jobs:
         run: npx tsc --noEmit
       - name: Unit tests if configured
         run: npm test --if-present
-      - name: Production build
+      - name: Production build (nonproduction stub URL)
+        env:
+          NEXT_PUBLIC_BACKEND_URL: https://example.invalid
         run: npm run build
+      - name: Browser-based contrast regression checks (Chrome)
+        run: |
+          npm install --no-save --no-audit --no-fund playwright@latest
+          node scripts/test-theme-contrast.cjs
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: theme-contrast-fixtures
+          path: /tmp/*OS*.png
+          if-no-files-found: ignore
