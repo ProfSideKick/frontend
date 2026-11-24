@@ -29,6 +29,7 @@ export default function SlidesPreview({ slides, sessionId }: SlidesPreviewProps)
   const [slidesPerPage, setSlidesPerPage] = useState(12);
   const [viewMode, setViewMode] = useState<'grid' | 'list'>('grid');
   const [isRegenerating, setIsRegenerating] = useState(false);
+  const [regenerationFeedback, setRegenerationFeedback] = useState<{ kind: 'success' | 'error'; message: string } | null>(null);
   const [editingVisionInstructions, setEditingVisionInstructions] = useState('');
   const [editingVisionModel, setEditingVisionModel] = useState(DEFAULT_VISION_MODEL);
   const [allSlides, setAllSlides] = useState<SlideData[]>(slides);
@@ -74,6 +75,7 @@ export default function SlidesPreview({ slides, sessionId }: SlidesPreviewProps)
   }, []);
 
   const handleSlideClick = (slide: SlideData) => {
+    setRegenerationFeedback(null);
     setSelectedSlide(slide);
     setEditingVisionInstructions(slide.visionInstructions || '');
     setEditingVisionModel(slide.visionModel || DEFAULT_VISION_MODEL);
@@ -83,6 +85,7 @@ export default function SlidesPreview({ slides, sessionId }: SlidesPreviewProps)
   };
 
   const closeModal = () => {
+    setRegenerationFeedback(null);
     setSelectedSlide(null);
     setEditingVisionInstructions('');
     setEditingVisionModel(DEFAULT_VISION_MODEL);
@@ -93,9 +96,12 @@ export default function SlidesPreview({ slides, sessionId }: SlidesPreviewProps)
 
   const handleRegenerateSlide = async (slide: SlideData) => {
     setIsRegenerating(true);
+    setRegenerationFeedback(null);
     try {
       const token = await getToken();
-      if (!token) return;
+      if (!token) {
+        throw new Error('Authentication expired. Please sign in again and retry.');
+      }
 
       const response = await fetch(
         config.getApiUrl(`/api/sessions/${sessionId}/slides/${slide.id}/vision`),
@@ -113,26 +119,43 @@ export default function SlidesPreview({ slides, sessionId }: SlidesPreviewProps)
       );
 
       if (!response.ok) {
-        throw new Error(`Failed to regenerate slide: ${response.statusText}`);
+        const errorBody = await response.json().catch(() => null);
+        const detail = errorBody?.detail;
+        const detailMessage = typeof detail === 'string'
+          ? detail
+          : (typeof detail?.message === 'string' ? detail.message : null);
+        throw new Error(`HTTP ${response.status}: ${detailMessage || response.statusText || 'Slide regeneration failed'}`);
       }
 
       const updatedSessionData = await response.json();
-      
-      // Update the slides with the new data
-      setAllSlides(updatedSessionData.slidesDetails);
-      
-      // Update the selected slide with the new data
-      const updatedSlide = updatedSessionData.slidesDetails.find((s: SlideData) => s.id === slide.id);
-      if (updatedSlide) {
-        setSelectedSlide(updatedSlide);
-        setEditingVisionInstructions(updatedSlide.visionInstructions || '');
-        setEditingVisionModel(updatedSlide.visionModel || DEFAULT_VISION_MODEL);
+      const updatedSlides = updatedSessionData?.slidesDetails;
+      if (!Array.isArray(updatedSlides)) {
+        throw new Error('The backend returned no slide data. Content was not updated.');
       }
 
-      console.log('✅ Slide regenerated successfully');
+      const updatedSlide = updatedSlides.find((s: SlideData) => s.id === slide.id);
+      if (!updatedSlide || typeof updatedSlide.content !== 'string' || !updatedSlide.content.trim()) {
+        throw new Error('The backend returned no regenerated content for this slide.');
+      }
+      if (updatedSlide.visionModel !== editingVisionModel) {
+        throw new Error('The backend did not confirm the requested analysis model. Content was not updated.');
+      }
+
+      // Apply server results only after validating the response.
+      setAllSlides(updatedSlides);
+      setSelectedSlide(updatedSlide);
+      setEditingVisionInstructions(updatedSlide.visionInstructions || '');
+      setEditingVisionModel(updatedSlide.visionModel);
+      setEditingContent(updatedSlide.content);
+      setEditingTitle(updatedSlide.title || '');
+      setRegenerationFeedback({
+        kind: 'success',
+        message: `Content regenerated successfully with ${updatedSlide.visionModel}.`,
+      });
     } catch (error) {
-      console.error('❌ Error regenerating slide:', error);
-      // You might want to show a toast notification here
+      const message = error instanceof Error ? error.message : 'Unknown regeneration error';
+      console.error('❌ Slide regeneration failed:', error);
+      setRegenerationFeedback({ kind: 'error', message });
     } finally {
       setIsRegenerating(false);
     }
@@ -587,6 +610,7 @@ export default function SlidesPreview({ slides, sessionId }: SlidesPreviewProps)
                       setSelectedSlide(slide);
                       setEditingVisionInstructions(slide.visionInstructions || '');
                       setEditingVisionModel(slide.visionModel || DEFAULT_VISION_MODEL);
+                      setRegenerationFeedback(null);
                     }}
                     className="p-1 bg-blue-600 text-white rounded hover:bg-blue-700 transition-colors"
                     title="View & Edit"
@@ -859,6 +883,14 @@ export default function SlidesPreview({ slides, sessionId }: SlidesPreviewProps)
                     )}
                   </button>
                 </div>
+                {regenerationFeedback && (
+                  <p
+                    role={regenerationFeedback.kind === 'error' ? 'alert' : 'status'}
+                    className={`mt-3 text-sm ${regenerationFeedback.kind === 'error' ? 'text-red-700' : 'text-green-700'}`}
+                  >
+                    {regenerationFeedback.message}
+                  </p>
+                )}
               </div>
 
               {/* Generated Content - Editable */}

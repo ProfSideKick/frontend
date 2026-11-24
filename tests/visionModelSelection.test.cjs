@@ -31,6 +31,14 @@ test('slide regeneration, add and image replacement use the selected or stored m
   assert.doesNotMatch(preview, /visionModel: 'gpt-4o'/);
 });
 
+test('regeneration returns explicit success and failure feedback', () => {
+  assert.match(preview, /setRegenerationFeedback\(\{ kind: 'error', message \}\)/);
+  assert.match(preview, /role=\{regenerationFeedback.kind === 'error' \? 'alert' : 'status'\}/);
+  assert.match(preview, /errorBody\?\.detail/);
+  assert.match(preview, /updatedSlide\.visionModel !== editingVisionModel/);
+  assert.match(preview, /Content regenerated successfully with/);
+});
+
 test('all edited TSX and TS sources transpile syntactically', () => {
   for (const [file, content] of [
     ['ClassCreation.tsx', creation], ['SlidesPreview.tsx', preview],
