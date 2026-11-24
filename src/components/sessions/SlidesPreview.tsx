@@ -32,6 +32,9 @@ export default function SlidesPreview({ slides, sessionId }: SlidesPreviewProps)
   const [regenerationFeedback, setRegenerationFeedback] = useState<{ message: string } | null>(null);
   const [editingVisionInstructions, setEditingVisionInstructions] = useState('');
   const [editingVisionModel, setEditingVisionModel] = useState(DEFAULT_VISION_MODEL);
+  const [sharedVisionModel, setSharedVisionModel] = useState(DEFAULT_VISION_MODEL);
+  const [bulkProgress, setBulkProgress] = useState<{ completed: number; total: number; failures: string[]; running: boolean } | null>(null);
+  const bulkRunning = useRef(false);
   const [allSlides, setAllSlides] = useState<SlideData[]>(slides);
   const [editingContent, setEditingContent] = useState('');
   const [editingTitle, setEditingTitle] = useState('');
@@ -41,7 +44,7 @@ export default function SlidesPreview({ slides, sessionId }: SlidesPreviewProps)
   const [isDeletingSlide, setIsDeletingSlide] = useState(false);
   const [isReplacingImage, setIsReplacingImage] = useState(false);
   const [draggedSlideId, setDraggedSlideId] = useState<number | null>(null);
-  const [, setIsReordering] = useState(false);
+  const [isReordering, setIsReordering] = useState(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
   const replaceImageInputRef = useRef<HTMLInputElement>(null);
 
@@ -75,10 +78,11 @@ export default function SlidesPreview({ slides, sessionId }: SlidesPreviewProps)
   }, []);
 
   const handleSlideClick = (slide: SlideData) => {
+    if (bulkRunning.current || isRegenerating) return;
     setRegenerationFeedback(null);
     setSelectedSlide(slide);
     setEditingVisionInstructions(slide.visionInstructions || '');
-    setEditingVisionModel(slide.visionModel || DEFAULT_VISION_MODEL);
+    setEditingVisionModel(sharedVisionModel);
     setEditingContent(slide.content || '');
     setEditingTitle(slide.title || '');
     setIsEditingContent(false);
@@ -88,16 +92,13 @@ export default function SlidesPreview({ slides, sessionId }: SlidesPreviewProps)
     setRegenerationFeedback(null);
     setSelectedSlide(null);
     setEditingVisionInstructions('');
-    setEditingVisionModel(DEFAULT_VISION_MODEL);
+    setEditingVisionModel(sharedVisionModel);
     setEditingContent('');
     setEditingTitle('');
     setIsEditingContent(false);
   };
 
-  const handleRegenerateSlide = async (slide: SlideData) => {
-    setIsRegenerating(true);
-    setRegenerationFeedback(null);
-    try {
+  const requestSlideRegeneration = async (slide: SlideData, instructions: string, model: string) => {
       const token = await getToken();
       if (!token) {
         throw new Error('Authentication expired. Please sign in again and retry.');
@@ -112,8 +113,8 @@ export default function SlidesPreview({ slides, sessionId }: SlidesPreviewProps)
             'Authorization': `Bearer ${token}`,
           },
           body: JSON.stringify({
-            visionInstructions: editingVisionInstructions,
-            visionModel: editingVisionModel,
+            visionInstructions: instructions,
+            visionModel: model,
           }),
         }
       );
@@ -147,7 +148,7 @@ export default function SlidesPreview({ slides, sessionId }: SlidesPreviewProps)
           typeof candidate === 'string' && Boolean(candidate.trim())
         );
         throw new Error(
-          `Model ${editingVisionModel}: HTTP ${response.status} — ${text?.slice(0, 500) || 'The backend returned no error details; check Railway logs.'}`
+          `Model ${model}: HTTP ${response.status} — ${text?.slice(0, 500) || 'The backend returned no error details; check Railway logs.'}`
         );
       }
 
@@ -161,15 +162,24 @@ export default function SlidesPreview({ slides, sessionId }: SlidesPreviewProps)
       if (!updatedSlide || typeof updatedSlide.content !== 'string' || !updatedSlide.content.trim()) {
         throw new Error('The backend returned no regenerated content for this slide.');
       }
-      if (updatedSlide.visionModel !== editingVisionModel) {
+      if (updatedSlide.visionModel !== model) {
         throw new Error('The backend did not confirm the requested analysis model. Content was not updated.');
       }
 
+      return { updatedSlides: updatedSlides as SlideData[], updatedSlide: updatedSlide as SlideData };
+  };
+
+  const handleRegenerateSlide = async (slide: SlideData) => {
+    if (bulkRunning.current || isRegenerating) return;
+    setIsRegenerating(true);
+    setRegenerationFeedback(null);
+    try {
+      const { updatedSlides, updatedSlide } = await requestSlideRegeneration(slide, editingVisionInstructions, editingVisionModel);
       // Apply server results only after validating the response.
       setAllSlides(updatedSlides);
       setSelectedSlide(updatedSlide);
       setEditingVisionInstructions(updatedSlide.visionInstructions || '');
-      setEditingVisionModel(updatedSlide.visionModel);
+      setEditingVisionModel(updatedSlide.visionModel || DEFAULT_VISION_MODEL);
       setEditingContent(updatedSlide.content);
       setEditingTitle(updatedSlide.title || '');
 
@@ -182,7 +192,36 @@ export default function SlidesPreview({ slides, sessionId }: SlidesPreviewProps)
     }
   };
 
+  const handleBulkRegenerate = async () => {
+    if (bulkRunning.current || isRegenerating || isAddingSlide || isDeletingSlide || isReplacingImage || isSavingContent || isReordering || selectedSlide || !allSlides.length) return;
+    const targets = [...allSlides];
+    const model = sharedVisionModel;
+    const label = VISION_MODEL_OPTIONS.find(option => option.value === model)?.label || model;
+    if (!confirm(`Regenerate all ${targets.length} slides with ${label}? Existing slide titles and content will be overwritten. Keep this page open until processing finishes.`)) return;
+    bulkRunning.current = true;
+    const failures: string[] = [];
+    let completed = 0;
+    setBulkProgress({ completed, total: targets.length, failures: [], running: true });
+    try {
+      // Each response persists the entire slide array; parallel requests could overwrite prior results.
+      for (const slide of targets) {
+        try {
+          const { updatedSlides } = await requestSlideRegeneration(slide, slide.visionInstructions || '', model);
+          setAllSlides(updatedSlides);
+        } catch (error) {
+          failures.push(`Slide ${slide.slideNumber}: ${error instanceof Error ? error.message : 'Unknown regeneration error'}`);
+        }
+        completed += 1;
+        setBulkProgress({ completed, total: targets.length, failures: [...failures], running: true });
+      }
+    } finally {
+      bulkRunning.current = false;
+      setBulkProgress({ completed, total: targets.length, failures: [...failures], running: false });
+    }
+  };
+
   const handleSaveContent = async (slide: SlideData) => {
+    if (bulkRunning.current) return;
     setIsSavingContent(true);
 
     try {
@@ -239,6 +278,7 @@ export default function SlidesPreview({ slides, sessionId }: SlidesPreviewProps)
   };
 
   const handleAddSlide = async (file: File) => {
+    if (bulkRunning.current || isRegenerating) return;
     setIsAddingSlide(true);
 
     try {
@@ -282,6 +322,7 @@ export default function SlidesPreview({ slides, sessionId }: SlidesPreviewProps)
   };
 
   const handleDeleteSlide = async (slideId: number) => {
+    if (bulkRunning.current || isRegenerating) return;
     
     if (!confirm('Are you sure you want to delete this slide? This action cannot be undone.')) {
       return;
@@ -325,6 +366,7 @@ export default function SlidesPreview({ slides, sessionId }: SlidesPreviewProps)
   };
 
   const handleReplaceImage = async (slideId: number, file: File) => {
+    if (bulkRunning.current || isRegenerating) return;
     
     setIsReplacingImage(true);
     try {
@@ -385,6 +427,7 @@ export default function SlidesPreview({ slides, sessionId }: SlidesPreviewProps)
   };
 
   const handleReorderSlides = async (newOrder: number[]) => {
+    if (bulkRunning.current || isRegenerating) return;
     
     setIsReordering(true);
     try {
@@ -425,6 +468,7 @@ export default function SlidesPreview({ slides, sessionId }: SlidesPreviewProps)
   };
 
   const handleDragStart = (e: React.DragEvent, slideId: number) => {
+    if (bulkRunning.current || isRegenerating) { e.preventDefault(); return; }
     setDraggedSlideId(slideId);
     e.dataTransfer.effectAllowed = 'move';
   };
@@ -436,6 +480,7 @@ export default function SlidesPreview({ slides, sessionId }: SlidesPreviewProps)
 
   const handleDrop = (e: React.DragEvent, targetSlideId: number) => {
     e.preventDefault();
+    if (bulkRunning.current || isRegenerating) return;
     
     if (draggedSlideId === null || draggedSlideId === targetSlideId) {
       setDraggedSlideId(null);
@@ -556,7 +601,7 @@ export default function SlidesPreview({ slides, sessionId }: SlidesPreviewProps)
           />
           <button
             onClick={() => fileInputRef.current?.click()}
-            disabled={isAddingSlide}
+            disabled={isAddingSlide || isRegenerating || Boolean(bulkProgress?.running)}
             className="px-3 py-2 text-sm bg-green-600 hover:bg-green-700 text-white rounded-lg transition-colors flex items-center gap-2 disabled:opacity-50 disabled:cursor-not-allowed"
           >
             {isAddingSlide ? (
@@ -628,10 +673,7 @@ export default function SlidesPreview({ slides, sessionId }: SlidesPreviewProps)
                   <button
                     onClick={(e) => {
                       e.stopPropagation();
-                      setSelectedSlide(slide);
-                      setEditingVisionInstructions(slide.visionInstructions || '');
-                      setEditingVisionModel(slide.visionModel || DEFAULT_VISION_MODEL);
-                      setRegenerationFeedback(null);
+                      handleSlideClick(slide);
                     }}
                     className="p-1 bg-blue-600 text-white rounded hover:bg-blue-700 transition-colors"
                     title="View & Edit"
@@ -643,7 +685,7 @@ export default function SlidesPreview({ slides, sessionId }: SlidesPreviewProps)
                       e.stopPropagation();
                       handleDeleteSlide(slide.id);
                     }}
-                    disabled={isDeletingSlide}
+                    disabled={isDeletingSlide || isRegenerating || Boolean(bulkProgress?.running)}
                     className="p-1 bg-red-600 text-white rounded hover:bg-red-700 transition-colors disabled:opacity-50"
                     title="Delete Slide"
                   >
@@ -667,7 +709,7 @@ export default function SlidesPreview({ slides, sessionId }: SlidesPreviewProps)
               return (
                 <div
                   key={slide.id}
-                  draggable
+                  draggable={!bulkProgress?.running && !isRegenerating}
                   onDragStart={(e) => handleDragStart(e, slide.id)}
                   onDragOver={handleDragOver}
                   onDrop={(e) => handleDrop(e, slide.id)}
@@ -716,7 +758,7 @@ export default function SlidesPreview({ slides, sessionId }: SlidesPreviewProps)
                         e.stopPropagation();
                         handleDeleteSlide(slide.id);
                       }}
-                      disabled={isDeletingSlide}
+                      disabled={isDeletingSlide || isRegenerating || Boolean(bulkProgress?.running)}
                       className="p-2 text-red-600 hover:bg-red-50 rounded-lg transition-colors disabled:opacity-50"
                       title="Delete Slide"
                     >
@@ -780,6 +822,29 @@ export default function SlidesPreview({ slides, sessionId }: SlidesPreviewProps)
         </div>
       )}
 
+      <div className="mt-6 border-t border-gray-200 pt-4">
+        <div className="flex flex-col sm:flex-row sm:items-end gap-3">
+          <div className="flex-1 min-w-0">
+            <label htmlFor="shared-slide-analysis-model" className="block text-sm font-medium text-gray-700 mb-1">Slide Analysis Model</label>
+            <select id="shared-slide-analysis-model" value={sharedVisionModel} onChange={e => setSharedVisionModel(e.target.value)} disabled={Boolean(bulkProgress?.running) || isRegenerating} className="w-full p-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 disabled:opacity-50">
+              {VISION_MODEL_OPTIONS.map(({ value, label }) => <option key={value} value={value}>{label}</option>)}
+            </select>
+          </div>
+          <button onClick={handleBulkRegenerate} disabled={Boolean(bulkProgress?.running) || isRegenerating || isAddingSlide || isDeletingSlide || isReplacingImage || isSavingContent || isReordering} className="flex items-center justify-center gap-2 px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 disabled:opacity-50 disabled:cursor-not-allowed">
+            <RefreshCw className={`w-4 h-4 ${bulkProgress?.running ? 'animate-spin' : ''}`} />
+            {bulkProgress?.running ? 'Regenerating slides…' : `Regenerate all ${allSlides.length} slides`}
+          </button>
+        </div>
+        <p className="mt-2 text-xs text-gray-500">The selected model is used for subsequent regeneration; changing it does not process any slides.</p>
+        {bulkProgress && (
+          <div className="mt-3 text-sm" role="status" aria-live="polite">
+            <progress className="w-full" value={bulkProgress.completed} max={bulkProgress.total} />
+            <p>{bulkProgress.completed} of {bulkProgress.total} processed · {bulkProgress.completed - bulkProgress.failures.length} succeeded · {bulkProgress.failures.length} failed</p>
+            {bulkProgress.failures.length > 0 && <ul className="mt-2 max-h-32 overflow-y-auto text-red-700 list-disc pl-5">{bulkProgress.failures.map((failure, index) => <li key={index}>{failure}</li>)}</ul>}
+          </div>
+        )}
+      </div>
+
       {/* Slide Modal */}
       {selectedSlide && (
         <div className="fixed inset-0 bg-black bg-opacity-75 flex items-center justify-center z-50 p-4" onClick={closeModal}>
@@ -791,7 +856,7 @@ export default function SlidesPreview({ slides, sessionId }: SlidesPreviewProps)
               <div className="flex items-center gap-2">
                 <button
                   onClick={() => handleDeleteSlide(selectedSlide.id)}
-                  disabled={isDeletingSlide}
+                  disabled={isDeletingSlide || isRegenerating || Boolean(bulkProgress?.running)}
                   className="p-2 text-red-600 hover:bg-red-50 rounded-lg transition-colors disabled:opacity-50"
                   title="Delete Slide"
                 >
@@ -861,7 +926,7 @@ export default function SlidesPreview({ slides, sessionId }: SlidesPreviewProps)
                   <h4 className="font-semibold text-gray-900">Vision Instructions</h4>
                   <div className="flex items-center gap-2">
                     <span className="text-xs text-gray-500 px-2 py-1 bg-gray-100 rounded">
-                      Model: {selectedSlide.visionModel || DEFAULT_VISION_MODEL}
+                      Last used: {selectedSlide.visionModel || DEFAULT_VISION_MODEL}
                     </span>
                   </div>
                 </div>
