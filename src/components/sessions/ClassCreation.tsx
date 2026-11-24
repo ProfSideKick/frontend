@@ -5,7 +5,8 @@ import { useRouter, useSearchParams } from "next/navigation";
 import { ClassDetails } from "@/types/types"; 
 import { useAuth } from "@/contexts/AuthContext"; 
 import ProtectedRoute from "@/components/auth/ProtectedRoute"; 
-import { config } from "@/lib/config"; 
+import { config } from "@/lib/config";
+import { DEFAULT_VISION_MODEL, VISION_MODEL_OPTIONS } from "@/constants/visionModels"; 
 import { ChevronLeft } from "lucide-react"; 
 import CourseSelector from "./CourseSelector"; 
 import { CourseDetails } from "@/hooks/useCourses"; 
@@ -78,6 +79,7 @@ export default function ClassCreation() {
     duration: 75,
     visionInstructions:
       "You are a helpful assistant that can analyze the slide image and provide a detailed description of the content.",
+    visionModel: DEFAULT_VISION_MODEL,
     assistant_parameters: {
       input_audio_format: "pcm16",
       input_audio_noice_reduction: {
@@ -392,6 +394,7 @@ export default function ClassCreation() {
         description: classDetails.description || "",
         duration: classDetails.duration,
         visionInstructions: classDetails.visionInstructions,
+        visionModel: classDetails.visionModel || DEFAULT_VISION_MODEL,
         assistantParameters: {
           input_audio_format:
             classDetails.assistant_parameters.input_audio_format,
@@ -709,6 +712,22 @@ export default function ClassCreation() {
                   className="w-full input-style"
                   placeholder="You are a helpful assistant that can analyze the slide image and provide a detailed description of the content."
                 ></textarea>
+              </div>
+              <div>
+                <label htmlFor="visionModel" className="block text-sm font-medium text-gray-700 mb-1">
+                  Slide Analysis Model
+                </label>
+                <select
+                  name="visionModel"
+                  id="visionModel"
+                  value={classDetails.visionModel || DEFAULT_VISION_MODEL}
+                  onChange={handleInputChange}
+                  className="w-full input-style"
+                >
+                  {VISION_MODEL_OPTIONS.map(({ value, label }) => (
+                    <option key={value} value={value}>{label}</option>
+                  ))}
+                </select>
               </div>
             </fieldset>
 
