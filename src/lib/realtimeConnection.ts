@@ -55,9 +55,40 @@ export async function createRealtimeConnection(
     }
   };
 
-  // Add local audio track for microphone input in the browser
-  const mediaStream = await navigator.mediaDevices.getUserMedia({ audio: true });
-  pc.addTrack(mediaStream.getTracks()[0]);
+  // Start with the system default. Android may expose a separate speakerphone
+  // communication input; selecting it can switch the paired output to loudspeaker.
+  // Never select a headset and never fail the session because routing fails.
+  let mediaStream = await navigator.mediaDevices.getUserMedia({ audio: true });
+  if (/Android/i.test(navigator.userAgent) && navigator.mediaDevices.enumerateDevices) {
+    try {
+      const devices = await navigator.mediaDevices.enumerateDevices();
+      const speakerphone = devices.find((device) =>
+        device.kind === "audioinput" &&
+        /speakerphone/i.test(device.label) &&
+        !/headset|headphone|bluetooth/i.test(device.label) &&
+        device.deviceId
+      );
+      const currentId = mediaStream.getAudioTracks()[0]?.getSettings().deviceId;
+      if (speakerphone && speakerphone.deviceId !== currentId) {
+        try {
+          const preferred = await navigator.mediaDevices.getUserMedia({
+            audio: { deviceId: { exact: speakerphone.deviceId } },
+          });
+          if (preferred.getAudioTracks().length) {
+            mediaStream.getTracks().forEach((track) => track.stop());
+            mediaStream = preferred;
+          } else {
+            preferred.getTracks().forEach((track) => track.stop());
+          }
+        } catch (error) {
+          console.warn("Speakerphone route unavailable; retaining default audio", error);
+        }
+      }
+    } catch (error) {
+      console.warn("Could not inspect Android audio routes; retaining default audio", error);
+    }
+  }
+  pc.addTrack(mediaStream.getAudioTracks()[0]);
 
   // Set codec preferences based on selected codec from the query parameter.
   const capabilities = RTCRtpSender.getCapabilities("audio");
