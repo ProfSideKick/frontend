@@ -269,14 +269,10 @@ export default function ClassCreation() {
   };
 
   const handleFileSelect = (file: File) => {
-    const allowedTypes = [
-      "application/pdf",
-      "application/vnd.ms-powerpoint",
-      "application/vnd.openxmlformats-officedocument.presentationml.presentation",
-    ];
-
-    if (!allowedTypes.includes(file.type)) {
-      setError("Please upload a PDF, PPT, or PPTX file");
+    // Use the extension rather than MIME type: some mobile file providers leave it blank.
+    if (!file.name.toLowerCase().endsWith(".pdf")) {
+      setSelectedFile(null);
+      setError("Only PDF presentations are currently supported. Export PowerPoint (.ppt/.pptx) to PDF before uploading.");
       return;
     }
 
@@ -424,10 +420,14 @@ export default function ClassCreation() {
         body: formData,
       });
 
-      const result = await response.json();
+      const result = await response.json().catch(() => null);
       if (!response.ok) {
+        // FastAPI puts validation errors in "detail", not "error" or "message".
+        const message = result?.detail || result?.error || result?.message;
         throw new Error(
-          result.error || result.message || "Failed to create session"
+          typeof message === "string"
+            ? message
+            : `Failed to create session (HTTP ${response.status})`
         );
       }
 
@@ -667,7 +667,7 @@ export default function ClassCreation() {
                 <input
                   ref={fileInputRef}
                   type="file"
-                  accept=".pdf,.ppt,.pptx"
+                  accept=".pdf,application/pdf"
                   onChange={handleFileInputChange}
                   className="hidden"
                 />
