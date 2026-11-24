@@ -4,6 +4,7 @@ import React, { useState, useEffect, useRef } from 'react';
 import { ChevronLeft, ChevronRight, Maximize2, Image as ImageIcon, RefreshCw, Edit3, Plus, Trash2, Upload, GripVertical } from 'lucide-react';
 import { useAuth } from '@/contexts/AuthContext';
 import { config } from '@/lib/config';
+import { DEFAULT_VISION_MODEL, VISION_MODEL_OPTIONS } from '@/constants/visionModels';
 
 interface SlideData {
   id: number;
@@ -29,6 +30,7 @@ export default function SlidesPreview({ slides, sessionId }: SlidesPreviewProps)
   const [viewMode, setViewMode] = useState<'grid' | 'list'>('grid');
   const [isRegenerating, setIsRegenerating] = useState(false);
   const [editingVisionInstructions, setEditingVisionInstructions] = useState('');
+  const [editingVisionModel, setEditingVisionModel] = useState(DEFAULT_VISION_MODEL);
   const [allSlides, setAllSlides] = useState<SlideData[]>(slides);
   const [editingContent, setEditingContent] = useState('');
   const [editingTitle, setEditingTitle] = useState('');
@@ -74,6 +76,7 @@ export default function SlidesPreview({ slides, sessionId }: SlidesPreviewProps)
   const handleSlideClick = (slide: SlideData) => {
     setSelectedSlide(slide);
     setEditingVisionInstructions(slide.visionInstructions || '');
+    setEditingVisionModel(slide.visionModel || DEFAULT_VISION_MODEL);
     setEditingContent(slide.content || '');
     setEditingTitle(slide.title || '');
     setIsEditingContent(false);
@@ -82,6 +85,7 @@ export default function SlidesPreview({ slides, sessionId }: SlidesPreviewProps)
   const closeModal = () => {
     setSelectedSlide(null);
     setEditingVisionInstructions('');
+    setEditingVisionModel(DEFAULT_VISION_MODEL);
     setEditingContent('');
     setEditingTitle('');
     setIsEditingContent(false);
@@ -103,7 +107,7 @@ export default function SlidesPreview({ slides, sessionId }: SlidesPreviewProps)
           },
           body: JSON.stringify({
             visionInstructions: editingVisionInstructions,
-            visionModel: 'gpt-4o', // Default model for now
+            visionModel: editingVisionModel,
           }),
         }
       );
@@ -122,6 +126,7 @@ export default function SlidesPreview({ slides, sessionId }: SlidesPreviewProps)
       if (updatedSlide) {
         setSelectedSlide(updatedSlide);
         setEditingVisionInstructions(updatedSlide.visionInstructions || '');
+        setEditingVisionModel(updatedSlide.visionModel || DEFAULT_VISION_MODEL);
       }
 
       console.log('✅ Slide regenerated successfully');
@@ -201,7 +206,7 @@ export default function SlidesPreview({ slides, sessionId }: SlidesPreviewProps)
       const formData = new FormData();
       formData.append('slide_image', file);
       formData.append('vision_instructions', 'You are a helpful assistant that can analyze the slide image and provide a detailed description of the content.');
-      formData.append('vision_model', 'gpt-4o');
+      formData.append('vision_model', allSlides[0]?.visionModel || DEFAULT_VISION_MODEL);
 
       const response = await fetch(
         config.getApiUrl(`/api/sessions/${sessionId}/slides/add`),
@@ -292,7 +297,7 @@ export default function SlidesPreview({ slides, sessionId }: SlidesPreviewProps)
       if (slide?.visionInstructions) {
         formData.append('vision_instructions', slide.visionInstructions);
       }
-      formData.append('vision_model', slide?.visionModel || 'gpt-4o');
+      formData.append('vision_model', selectedSlide?.id === slideId ? editingVisionModel : (slide?.visionModel || DEFAULT_VISION_MODEL));
 
       const response = await fetch(
         config.getApiUrl(`/api/sessions/${sessionId}/slides/${slideId}/replace-image`),
@@ -318,6 +323,7 @@ export default function SlidesPreview({ slides, sessionId }: SlidesPreviewProps)
         if (updatedSlide) {
           setSelectedSlide(updatedSlide);
           setEditingVisionInstructions(updatedSlide.visionInstructions || '');
+          setEditingVisionModel(updatedSlide.visionModel || DEFAULT_VISION_MODEL);
           setEditingContent(updatedSlide.content || '');
           setEditingTitle(updatedSlide.title || '');
         }
@@ -580,6 +586,7 @@ export default function SlidesPreview({ slides, sessionId }: SlidesPreviewProps)
                       e.stopPropagation();
                       setSelectedSlide(slide);
                       setEditingVisionInstructions(slide.visionInstructions || '');
+                      setEditingVisionModel(slide.visionModel || DEFAULT_VISION_MODEL);
                     }}
                     className="p-1 bg-blue-600 text-white rounded hover:bg-blue-700 transition-colors"
                     title="View & Edit"
@@ -809,7 +816,7 @@ export default function SlidesPreview({ slides, sessionId }: SlidesPreviewProps)
                   <h4 className="font-semibold text-gray-900">Vision Instructions</h4>
                   <div className="flex items-center gap-2">
                     <span className="text-xs text-gray-500 px-2 py-1 bg-gray-100 rounded">
-                      Model: {selectedSlide.visionModel || 'gpt-4o'}
+                      Model: {selectedSlide.visionModel || DEFAULT_VISION_MODEL}
                     </span>
                   </div>
                 </div>
@@ -820,6 +827,16 @@ export default function SlidesPreview({ slides, sessionId }: SlidesPreviewProps)
                   rows={4}
                   placeholder="Enter vision instructions for analyzing this slide..."
                 />
+                <div className="mt-3">
+                  <label htmlFor="slide-analysis-model" className="block text-sm font-medium text-gray-700 mb-1">Slide Analysis Model</label>
+                  <select id="slide-analysis-model" value={editingVisionModel}
+                    onChange={(e) => setEditingVisionModel(e.target.value)}
+                    className="w-full p-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500">
+                    {VISION_MODEL_OPTIONS.map(({ value, label }) => (
+                      <option key={value} value={value}>{label}</option>
+                    ))}
+                  </select>
+                </div>
                 <div className="flex items-center justify-between mt-3">
                   <p className="text-xs text-gray-500">
                     Customize how the AI analyzes this slide image to extract content and title.
