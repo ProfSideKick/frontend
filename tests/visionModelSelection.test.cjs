@@ -25,7 +25,8 @@ test('session creation stores a user-selected slide vision model', () => {
 
 test('slide regeneration, add and image replacement use the selected or stored model', () => {
   assert.match(preview, /id="slide-analysis-model"/);
-  assert.match(preview, /visionModel: editingVisionModel/);
+  assert.match(preview, /visionModel: model/);
+  assert.match(preview, /requestSlideRegeneration\(slide, editingVisionInstructions, editingVisionModel\)/);
   assert.match(preview, /formData\.append\('vision_model', allSlides\[0\]\?\.visionModel \|\| DEFAULT_VISION_MODEL\)/);
   assert.match(preview, /selectedSlide\?\.id === slideId \? editingVisionModel/);
   assert.doesNotMatch(preview, /visionModel: 'gpt-4o'/);
@@ -36,7 +37,7 @@ test('regeneration exposes detailed error and never shows a success banner', () 
   assert.match(preview, /role="alert"/);
   assert.match(preview, /response\.text\(\)/);
   assert.match(preview, /errorBody\?\.detail/);
-  assert.match(preview, /updatedSlide\.visionModel !== editingVisionModel/);
+  assert.match(preview, /updatedSlide\.visionModel !== model/);
   assert.doesNotMatch(preview, /Content regenerated successfully with/);
 });
 
@@ -52,4 +53,19 @@ test('all edited TSX and TS sources transpile syntactically', () => {
     const errors = (result.diagnostics || []).filter(x => x.category === ts.DiagnosticCategory.Error);
     assert.equal(errors.length, 0, file + ': ' + errors.map(x => x.messageText).join('; '));
   }
+});
+
+test('shared selection defaults to GPT-4o and only explicit regeneration calls the backend', () => {
+  assert.match(preview, /\[sharedVisionModel, setSharedVisionModel\] = useState\(DEFAULT_VISION_MODEL\)/);
+  assert.match(preview, /setEditingVisionModel\(sharedVisionModel\)/);
+  assert.match(preview, /onChange=\{e => setSharedVisionModel\(e.target.value\)\}/);
+  assert.match(preview, /Last used: \{selectedSlide.visionModel/);
+});
+test('bulk regeneration awaits each slide, preserves instructions and tracks partial failures', () => {
+  assert.match(preview, /for \(const slide of targets\)/);
+  assert.match(preview, /await requestSlideRegeneration\(slide, slide.visionInstructions \|\| '', model\)/);
+  assert.match(preview, /bulkRunning.current = true/);
+  assert.match(preview, /bulkRunning.current = false/);
+  assert.match(preview, /failures.push\(/);
+  assert.match(preview, /if \(!confirm\(\x60Regenerate all/);
 });
