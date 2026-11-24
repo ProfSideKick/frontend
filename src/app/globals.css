@@ -23,17 +23,18 @@
 }
 
 :root {
+  color-scheme: light;
   --background: #fafafa;
   --foreground: #171717;
 }
 
-/* Support both class-based (next-themes) and OS-level dark mode */
-.dark,
-@media (prefers-color-scheme: dark) {
-  :root {
-    --background: #0a0a0a;
-    --foreground: #ededed;
-  }
+/* next-themes applies .dark to the root element for system and manual dark mode.
+   Keep these variables class-controlled so explicit Light remains readable even
+   when the operating system prefers dark mode. */
+:root.dark {
+  color-scheme: dark;
+  --background: #0a0a0a;
+  --foreground: #ededed;
 }
 
 body {
