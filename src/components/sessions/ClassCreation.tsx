@@ -427,12 +427,16 @@ export default function ClassCreation() {
         body: formData,
       });
 
-      const result = await response.json();
       if (!response.ok) {
+        const result = await response.json().catch(() => null);
+        const detail = [result?.message, result?.detail, result?.error].find(
+          (value): value is string => typeof value === "string" && value.trim().length > 0
+        );
         throw new Error(
-          result.error || result.message || "Failed to create session"
+          detail ? `HTTP ${response.status}: ${detail}` : `Failed to create session (HTTP ${response.status})`
         );
       }
+      const result = await response.json();
 
       // Redirect to the session overview page using new nested URL structure
       router.push(`/courses/${selectedCourseId}/sessions/${result.sessionId}`);
