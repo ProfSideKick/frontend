@@ -40,8 +40,12 @@ function setup({ android = true, devices = [], enumerateError, switchError, sdpE
       return devices;
     },
   };
+  const events = {};
   const audio = { current: {
-    srcObject: null, muted: true, paused: audioPaused,
+    srcObject: null, muted: false, volume: 1, paused: audioPaused,
+    addEventListener(name, fn) { events[name] = fn; },
+    removeEventListener(name, fn) { if(events[name]===fn) delete events[name]; },
+    toggleMuted(muted) { this.muted = muted; events.volumechange?.(); },
     play() { return audioPlayReject ? Promise.reject(Error('autoplay blocked')) : Promise.resolve(); },
   } };
   const module = { exports: {} };
@@ -113,124 +117,124 @@ test('WebRTC failure cleans up preferred mic and peer connection', async () => {
 });
 
 
-function fakeWebAudio({ initialState = 'running', constructionFails = false, resumeRejects = false } = {}) {
-  const contexts = [];
-  class FakeAudioContext {
-    constructor() {
-      if (constructionFails) throw Error('Web Audio unavailable');
-      this.state = initialState;
-      this.closed = false;
-      this.nodes = [];
-      contexts.push(this);
+function fakeWebAudio({failConstructor=false,failSource=false,suspended=false,failResume=false}={}) {
+  const contexts=[];
+  class FakeContext {
+    constructor(){
+      if(failConstructor) throw Error('blocked');
+      this.nodes=[]; this.destination={name:'speaker'};
+      this.closed=false; this.state=suspended?'suspended':'running'; contexts.push(this);
     }
-    node(name, extra = {}) {
-      const result = { name, ...extra, connectedTo: null, connect(dest) { this.connectedTo = dest; } };
-      this.nodes.push(result);
-      return result;
+    node(kind,props={}){
+      const node={kind,...props,connected:null,connect(dest){this.connected=dest;}};
+      this.nodes.push(node); return node;
     }
-    createMediaStreamSource(stream) { return this.node('source', { stream }); }
-    createGain() { return this.node('gain', { gain: { value: 1 } }); }
-    createDynamicsCompressor() {
-      return this.node('compressor', {
-        threshold: { value: 0 }, knee: { value: 0 }, ratio: { value: 0 },
-        attack: { value: 0 }, release: { value: 0 },
-      });
+    createMediaStreamSource(stream) {
+      if(failSource) throw Error('bad source');
+      return this.node('source',{stream});
     }
-    createMediaStreamDestination() { return this.node('destination', { stream: { boosted: true } }); }
-    async resume() {
-      if (resumeRejects) throw Error('Autoplay denied');
-      this.state = 'running';
+    createGain(){return this.node('gain',{gain:{value:1}});}
+    createDynamicsCompressor(){
+      return this.node('compressor',{threshold:{value:0},knee:{value:0},ratio:{value:0},attack:{value:0},release:{value:0}});
     }
-    async close() { this.closed = true; this.state = 'closed'; }
+    createMediaStreamDestination(){throw Error('Processed stream replacement is forbidden');}
+    async resume(){if(failResume)throw Error('autoplay');this.state='running';}
+    async close(){this.closed=true;this.state='closed';}
   }
-  return { AudioContextClass: FakeAudioContext, contexts };
+  return {AudioContextClass:FakeContext,contexts};
 }
-const nextTurn = () => new Promise(resolve => setImmediate(resolve));
-const aiSpeech = { id: 'remote-ai-voice' };
-
-test('Android: boosts only AI output and keeps microphone and mute behavior', async () => {
-  const wa = fakeWebAudio();
-  const s = setup({ AudioContextClass: wa.AudioContextClass });
-  const { mediaStream } = await s.createRealtimeConnection('key', s.audio, 'opus');
-  s.peer.ontrack({ streams: [aiSpeech] });
-  const ctx = wa.contexts[0];
-  assert.equal(ctx.nodes[0].stream, aiSpeech);
-  assert.equal(ctx.nodes[1].gain.value, 1.8);
-  assert.equal(ctx.nodes[2].threshold.value, -10);
-  assert.equal(ctx.nodes[2].ratio.value, 12);
-  assert.equal(ctx.nodes[3].gain.value, 0.9);
-  assert.equal(ctx.nodes[0].connectedTo, ctx.nodes[1]);
-  assert.equal(ctx.nodes[1].connectedTo, ctx.nodes[2]);
-  assert.equal(ctx.nodes[2].connectedTo, ctx.nodes[3]);
-  assert.equal(ctx.nodes[3].connectedTo, ctx.nodes[4]);
-  assert.equal(s.audio.current.srcObject, ctx.nodes[4].stream);
-  assert.equal(s.audio.current.muted, true);
-  assert.equal(s.peer.sent[0], mediaStream.track);
+const settle=()=>new Promise(resolve=>setImmediate(resolve));
+function remote(){
+  const track={stopped:false,stop(){this.stopped=true}};
+  const clone={getTracks:()=>[track]};
+  const original={clone:()=>clone,getTracks:()=>[{stop(){throw Error('native stream stopped')}}]};
+  return {original,clone,track};
+}
+test('Android preserves native WebRTC stream while adding a direct amplified path',async()=>{
+  const wa=fakeWebAudio(),s=setup({AudioContextClass:wa.AudioContextClass}),r=remote();
+  await s.createRealtimeConnection('key',s.audio,'opus');
+  s.peer.ontrack({streams:[r.original]});
+  const c=wa.contexts[0];
+  assert.equal(s.audio.current.srcObject,r.original);
+  assert.equal(s.audio.current.muted,false);
+  assert.equal(c.nodes[0].stream,r.clone);
+  assert.equal(c.nodes[1].gain.value,1.6);
+  assert.equal(c.nodes[2].threshold.value,-12);
+  assert.equal(c.nodes[2].ratio.value,12);
+  assert.equal(c.nodes[3].gain.value,.5);
+  assert.equal(c.nodes[0].connected,c.nodes[1]);
+  assert.equal(c.nodes[1].connected,c.nodes[2]);
+  assert.equal(c.nodes[2].connected,c.nodes[3]);
+  assert.equal(c.nodes[3].connected,c.destination);
+  assert.equal(r.track.stopped,false);
 });
-
-test('Non-Android preserves the unprocessed WebRTC stream', async () => {
-  const wa = fakeWebAudio();
-  const s = setup({ android: false, AudioContextClass: wa.AudioContextClass });
-  await s.createRealtimeConnection('key', s.audio, 'opus');
-  s.peer.ontrack({ streams: [aiSpeech] });
-  assert.equal(s.audio.current.srcObject, aiSpeech);
-  assert.equal(wa.contexts.length, 0);
+test('Original mute button mutes the boost, then restores it without changing native stream',async()=>{
+  const wa=fakeWebAudio(),s=setup({AudioContextClass:wa.AudioContextClass}),r=remote();
+  await s.createRealtimeConnection('key',s.audio,'opus');
+  s.peer.ontrack({streams:[r.original]});
+  const gain=wa.contexts[0].nodes[3].gain;
+  s.audio.current.toggleMuted(true);
+  assert.equal(gain.value,0);
+  s.audio.current.toggleMuted(false);
+  assert.equal(gain.value,.5);
+  assert.equal(s.audio.current.srcObject,r.original);
 });
-
-test('Android without Web Audio keeps native output', async () => {
-  const s = setup();
-  await s.createRealtimeConnection('key', s.audio, 'opus');
-  s.peer.ontrack({ streams: [aiSpeech] });
-  assert.equal(s.audio.current.srcObject, aiSpeech);
+test('Non-Android uses original sound with no added graph',async()=>{
+  const wa=fakeWebAudio(),s=setup({android:false,AudioContextClass:wa.AudioContextClass}),r=remote();
+  await s.createRealtimeConnection('key',s.audio,'opus');
+  s.peer.ontrack({streams:[r.original]});
+  assert.equal(s.audio.current.srcObject,r.original);
+  assert.equal(wa.contexts.length,0);
 });
-
-test('Web Audio construction failure keeps native output', async () => {
-  const wa = fakeWebAudio({ constructionFails: true });
-  const s = setup({ AudioContextClass: wa.AudioContextClass });
-  await s.createRealtimeConnection('key', s.audio, 'opus');
-  s.peer.ontrack({ streams: [aiSpeech] });
-  assert.equal(s.audio.current.srcObject, aiSpeech);
+test('Web Audio unavailable retains original stream',async()=>{
+  const s=setup(),r=remote();
+  await s.createRealtimeConnection('key',s.audio,'opus');
+  s.peer.ontrack({streams:[r.original]});
+  assert.equal(s.audio.current.srcObject,r.original);
+  assert.equal(r.track.stopped,false);
 });
-
-test('AudioContext resume failure leaves original audio and closes processing', async () => {
-  const wa = fakeWebAudio({ initialState: 'suspended', resumeRejects: true });
-  const s = setup({ AudioContextClass: wa.AudioContextClass });
-  await s.createRealtimeConnection('key', s.audio, 'opus');
-  s.peer.ontrack({ streams: [aiSpeech] });
-  await nextTurn();
-  assert.equal(s.audio.current.srcObject, aiSpeech);
-  assert.equal(wa.contexts[0].closed, true);
+test('Context construction failure never stops native audio',async()=>{
+  const wa=fakeWebAudio({failConstructor:true}),s=setup({AudioContextClass:wa.AudioContextClass}),r=remote();
+  await s.createRealtimeConnection('key',s.audio,'opus');
+  s.peer.ontrack({streams:[r.original]});
+  assert.equal(s.audio.current.srcObject,r.original);
+  assert.equal(r.track.stopped,true);
 });
-
-test('Autoplay rejection restores original audio and closes processing', async () => {
-  const wa = fakeWebAudio();
-  const s = setup({ AudioContextClass: wa.AudioContextClass, audioPaused: true, audioPlayReject: true });
-  await s.createRealtimeConnection('key', s.audio, 'opus');
-  s.peer.ontrack({ streams: [aiSpeech] });
-  await nextTurn();
-  assert.equal(s.audio.current.srcObject, aiSpeech);
-  assert.equal(wa.contexts[0].closed, true);
+test('Graph setup error cleans up clone without muting original',async()=>{
+  const wa=fakeWebAudio({failSource:true}),s=setup({AudioContextClass:wa.AudioContextClass}),r=remote();
+  await s.createRealtimeConnection('key',s.audio,'opus');
+  s.peer.ontrack({streams:[r.original]});
+  await settle();
+  assert.equal(s.audio.current.srcObject,r.original);
+  assert.equal(r.track.stopped,true);
+  assert.equal(wa.contexts[0].closed,true);
 });
-
-test('WebRTC disconnection closes the audio context', async () => {
-  const wa = fakeWebAudio();
-  const s = setup({ AudioContextClass: wa.AudioContextClass });
-  await s.createRealtimeConnection('key', s.audio, 'opus');
-  s.peer.ontrack({ streams: [aiSpeech] });
+test('AudioContext resume rejection leaves native audio playing',async()=>{
+  const wa=fakeWebAudio({suspended:true,failResume:true}),s=setup({AudioContextClass:wa.AudioContextClass}),r=remote();
+  await s.createRealtimeConnection('key',s.audio,'opus');
+  s.peer.ontrack({streams:[r.original]});
+  await settle();
+  assert.equal(s.audio.current.srcObject,r.original);
+  assert.equal(s.audio.current.muted,false);
+  assert.equal(wa.contexts[0].closed,true);
+});
+test('Disconnect cleans overlay without destroying native audio stream',async()=>{
+  const wa=fakeWebAudio(),s=setup({AudioContextClass:wa.AudioContextClass}),r=remote();
+  await s.createRealtimeConnection('key',s.audio,'opus');
+  s.peer.ontrack({streams:[r.original]});
   s.peer.emitState('closed');
-  await nextTurn();
-  assert.equal(wa.contexts[0].closed, true);
+  await settle();
+  assert.equal(r.track.stopped,true);
+  assert.equal(wa.contexts[0].closed,true);
+  assert.equal(s.audio.current.srcObject,r.original);
 });
-
-test('Repeated ontrack events do not leave duplicate audio contexts', async () => {
-  const wa = fakeWebAudio();
-  const s = setup({ AudioContextClass: wa.AudioContextClass });
-  await s.createRealtimeConnection('key', s.audio, 'opus');
-  s.peer.ontrack({ streams: [aiSpeech] });
-  const newerStream = { id: 'new-ai-voice' };
-  s.peer.ontrack({ streams: [newerStream] });
-  await nextTurn();
-  assert.equal(wa.contexts[0].closed, true);
-  assert.equal(wa.contexts.length, 2);
-  assert.equal(s.audio.current.srcObject, wa.contexts[1].nodes[4].stream);
+test('Repeated incoming tracks clean the old boost and retain the new native stream',async()=>{
+  const wa=fakeWebAudio(),s=setup({AudioContextClass:wa.AudioContextClass}),r1=remote(),r2=remote();
+  await s.createRealtimeConnection('key',s.audio,'opus');
+  s.peer.ontrack({streams:[r1.original]});s.peer.ontrack({streams:[r2.original]});
+  await settle();
+  assert.equal(r1.track.stopped,true);
+  assert.equal(wa.contexts[0].closed,true);
+  assert.equal(s.audio.current.srcObject,r2.original);
+  assert.equal(wa.contexts.length,2);
 });

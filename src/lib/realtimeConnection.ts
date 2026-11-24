@@ -49,74 +49,74 @@ export async function createRealtimeConnection(
   // Create a new RTCPeerConnection
   const pc = new RTCPeerConnection();
 
-  // Android-only amplification of the AI *output*, never the microphone.
-  // Native WebRTC playback remains available if Web Audio is unsupported or blocked.
-  let activeAudioContext: AudioContext | null = null;
-  const releaseAudioContext = () => {
-    const context = activeAudioContext;
-    activeAudioContext = null;
-    if (context) void context.close().catch(() => {});
+  // Native WebRTC audio is ALWAYS kept. Android may supplement it with a
+  // separate boost output; failure in that path cannot silence native playback.
+  let boostedContext: AudioContext | null = null;
+  let boostedClone: MediaStream | null = null;
+  let unsubscribeVolume: (() => void) | null = null;
+  const disposeBoost = () => {
+    unsubscribeVolume?.();
+    unsubscribeVolume = null;
+    boostedClone?.getTracks().forEach(t => t.stop());
+    boostedClone = null;
+    const old = boostedContext;
+    boostedContext = null;
+    if (old) void old.close().catch(() => {});
   };
   pc.addEventListener("connectionstatechange", () => {
-    if (pc.connectionState === "closed" || pc.connectionState === "failed") {
-      releaseAudioContext();
-    }
+    if (pc.connectionState === "closed" || pc.connectionState === "failed")
+      disposeBoost();
   });
 
-  pc.ontrack = (e) => {
+  pc.ontrack = e => {
     const element = audioElement.current;
-    const originalStream = e.streams[0];
-    if (!element || !originalStream) return;
+    const original = e.streams[0];
+    if (!element || !original) return;
+    disposeBoost();
 
-    releaseAudioContext();
-    element.srcObject = originalStream;
-    if (!/Android/i.test(navigator.userAgent) || typeof AudioContext === "undefined") return;
+    // This must never be swapped for a processed stream (PR #6 regression).
+    element.srcObject = original;
+    if (!/Android/i.test(navigator.userAgent) || typeof AudioContext === "undefined")
+      return;
 
     let context: AudioContext | null = null;
+    let clone: MediaStream | null = null;
     try {
+      clone = original.clone();
       context = new AudioContext();
-      const source = context.createMediaStreamSource(originalStream);
+      const source = context.createMediaStreamSource(clone);
       const boost = context.createGain();
-      boost.gain.value = 1.8; // +5.1 dB on quiet speech before compression
-      const limiter = context.createDynamicsCompressor();
-      limiter.threshold.value = -10;
-      limiter.knee.value = 0;
-      limiter.ratio.value = 12;
-      limiter.attack.value = 0.003;
-      limiter.release.value = 0.2;
-      const outputGain = context.createGain();
-      outputGain.gain.value = 0.9; // post-compression headroom, not device volume
-      const destination = context.createMediaStreamDestination();
-      source.connect(boost);
-      boost.connect(limiter);
-      limiter.connect(outputGain);
-      outputGain.connect(destination);
-      activeAudioContext = context;
-
-      const activateBoost = () => {
-        if (activeAudioContext !== context || context?.state !== "running" ||
-            audioElement.current !== element || element.srcObject !== originalStream ||
-            pc.connectionState === "closed") return;
-        element.srcObject = destination.stream;
-        // If browser autoplay is blocked, restore native playback.
-        if (element.paused) {
-          void element.play().catch(() => {
-            if (activeAudioContext === context) {
-              if (element.srcObject === destination.stream) element.srcObject = originalStream;
-              releaseAudioContext();
-            }
-          });
-        }
+      boost.gain.value = 1.6;
+      const compressor = context.createDynamicsCompressor();
+      compressor.threshold.value = -12;
+      compressor.knee.value = 0;
+      compressor.ratio.value = 12;
+      compressor.attack.value = 0.003;
+      compressor.release.value = 0.2;
+      const overlay = context.createGain();
+      const syncMute = () => {
+        overlay.gain.value = element.muted ? 0 : 0.5 * element.volume;
       };
-      if (context.state === "running") activateBoost();
-      else void context.resume().then(activateBoost).catch(() => {
-        if (activeAudioContext === context) releaseAudioContext();
-      });
-    } catch (error) {
-      console.warn("Android output amplification unavailable; retaining native audio", error);
+      syncMute();
+      source.connect(boost);
+      boost.connect(compressor);
+      compressor.connect(overlay);
+      overlay.connect(context.destination);
+
+      // The existing mute button controls both paths, with NO UI changes.
+      element.addEventListener("volumechange", syncMute);
+      unsubscribeVolume = () => element.removeEventListener("volumechange", syncMute);
+      boostedContext = context;
+      boostedClone = clone;
+      if (context.state !== "running") {
+        void context.resume().catch(() => {
+          if (boostedContext === context) disposeBoost();
+        });
+      }
+    } catch (err) {
+      console.warn("Android boost unavailable: native WebRTC audio retained", err);
       if (context) void context.close().catch(() => {});
-      activeAudioContext = null;
-      element.srcObject = originalStream;
+      clone?.getTracks().forEach(t => t.stop());
     }
   };
 
