@@ -1,0 +1,31 @@
+name: Validate theme fixes
+on:
+  push:
+    branches:
+      - fix/spring-light-theme-contrast-20261123
+      - fix/summer-theme-vars-20261123
+  pull_request:
+    branches:
+      - spring-profsidekick-frontend
+      - summer-autograder-frontend
+  workflow_dispatch:
+jobs:
+  validate:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: npm
+      - name: Install
+        run: npm ci --no-audit --no-fund
+      - name: Generate stylesheet (Tailwind/PostCSS)
+        run: npx tailwindcss --input src/app/globals.css --output /tmp/profsidekick-theme.css
+      - name: Typecheck
+        run: npx tsc --noEmit
+      - name: Unit tests if configured
+        run: npm test --if-present
+      - name: Production build
+        run: npm run build
