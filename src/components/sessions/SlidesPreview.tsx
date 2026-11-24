@@ -29,7 +29,7 @@ export default function SlidesPreview({ slides, sessionId }: SlidesPreviewProps)
   const [slidesPerPage, setSlidesPerPage] = useState(12);
   const [viewMode, setViewMode] = useState<'grid' | 'list'>('grid');
   const [isRegenerating, setIsRegenerating] = useState(false);
-  const [regenerationFeedback, setRegenerationFeedback] = useState<{ kind: 'success' | 'error'; message: string } | null>(null);
+  const [regenerationFeedback, setRegenerationFeedback] = useState<{ message: string } | null>(null);
   const [editingVisionInstructions, setEditingVisionInstructions] = useState('');
   const [editingVisionModel, setEditingVisionModel] = useState(DEFAULT_VISION_MODEL);
   const [allSlides, setAllSlides] = useState<SlideData[]>(slides);
@@ -119,12 +119,36 @@ export default function SlidesPreview({ slides, sessionId }: SlidesPreviewProps)
       );
 
       if (!response.ok) {
-        const errorBody = await response.json().catch(() => null);
+        // Some gateways return plain text, nested JSON, or an HTML 500 page.
+        // The previous JSON-only reader concealed their actual error messages.
+        const raw = await response.text().catch(() => '');
+        let errorBody: Record<string, unknown> | null = null;
+        try {
+          const parsed = JSON.parse(raw);
+          if (parsed && typeof parsed === 'object') {
+            errorBody = parsed as Record<string, unknown>;
+          }
+        } catch {
+          // Non-JSON response; retain a short plain-text message when available.
+        }
         const detail = errorBody?.detail;
-        const detailMessage = typeof detail === 'string'
-          ? detail
-          : (typeof detail?.message === 'string' ? detail.message : null);
-        throw new Error(`HTTP ${response.status}: ${detailMessage || response.statusText || 'Slide regeneration failed'}`);
+        const error = errorBody?.error;
+        const errorMessage = error && typeof error === 'object'
+          ? (error as Record<string, unknown>).message
+          : error;
+        const candidates = [
+          typeof detail === 'string' ? detail : null,
+          (detail && typeof detail === 'object') ? (detail as Record<string, unknown>).message : null,
+          errorMessage,
+          errorBody?.message,
+          raw && !raw.trimStart().startsWith('<') ? raw : null,
+        ];
+        const text = candidates.find((candidate): candidate is string =>
+          typeof candidate === 'string' && Boolean(candidate.trim())
+        );
+        throw new Error(
+          `Model ${editingVisionModel}: HTTP ${response.status} — ${text?.slice(0, 500) || 'The backend returned no error details; check Railway logs.'}`
+        );
       }
 
       const updatedSessionData = await response.json();
@@ -148,14 +172,11 @@ export default function SlidesPreview({ slides, sessionId }: SlidesPreviewProps)
       setEditingVisionModel(updatedSlide.visionModel);
       setEditingContent(updatedSlide.content);
       setEditingTitle(updatedSlide.title || '');
-      setRegenerationFeedback({
-        kind: 'success',
-        message: `Content regenerated successfully with ${updatedSlide.visionModel}.`,
-      });
+
     } catch (error) {
       const message = error instanceof Error ? error.message : 'Unknown regeneration error';
       console.error('❌ Slide regeneration failed:', error);
-      setRegenerationFeedback({ kind: 'error', message });
+      setRegenerationFeedback({ message });
     } finally {
       setIsRegenerating(false);
     }
@@ -884,10 +905,7 @@ export default function SlidesPreview({ slides, sessionId }: SlidesPreviewProps)
                   </button>
                 </div>
                 {regenerationFeedback && (
-                  <p
-                    role={regenerationFeedback.kind === 'error' ? 'alert' : 'status'}
-                    className={`mt-3 text-sm ${regenerationFeedback.kind === 'error' ? 'text-red-700' : 'text-green-700'}`}
-                  >
+                  <p role="alert" className="mt-3 text-sm text-red-700">
                     {regenerationFeedback.message}
                   </p>
                 )}
