@@ -106,6 +106,7 @@ export interface ClassDetails {
   description?: string;
   duration: 30 | 45 | 60 | 75 | 90;
   visionInstructions: string;
+  visionModel?: string;
   assistant_parameters: {
     input_audio_format: "pcm16" | "g711_ulaw" | "g711_alaw";
     input_audio_noice_reduction: {
